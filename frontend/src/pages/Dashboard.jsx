@@ -18,8 +18,7 @@ const Dashboard = () => {
     loading
   } = useDeliveryStore();
 
-  const [nearestDeliveryId, setNearestDeliveryId] = useState(null);
-  const [page, setPage] = useState("dashboard");
+ const [page, setPage] = useState("dashboard");
 
   // Optionally load deliveries from API on first load
   useEffect(() => {
@@ -46,7 +45,6 @@ const Dashboard = () => {
   const handleDeliveriesUpdate = (updatedList) => {
     setDeliveries(updatedList);
   };
-  console.log(deliveries)
 
   return (
     <div>
@@ -63,7 +61,6 @@ const Dashboard = () => {
               <DeliveryMap
                 deliveries={deliveries}
                 // selectedDelivery={deliveries}
-                // onNearestChange={setNearestDeliveryId}
               />
             </section>
 
@@ -71,7 +68,6 @@ const Dashboard = () => {
               <h2 className="text-lg font-semibold mb-2">Deliveries</h2>
               <DeliveryList
                 deliveries={deliveries}
-                nearestDeliveryId={nearestDeliveryId}
                 onSelectDelivery={(d) => setSelectedDelivery(d)}
                 onMarkDelivered={markAsDelivered}
                 onDeliveriesUpdate={handleDeliveriesUpdate}

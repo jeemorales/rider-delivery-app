@@ -61,29 +61,29 @@ export default function DeliveryList({
 
                 {/* BUTTONS */}
                 <div className="flex flex-col gap-2 shrink-0">
-                  <button
+                  <a
                     className="btn btn-sm btn-outline"
                     onClick={() => onSelectDelivery && onSelectDelivery(d)}
                   >
                     <Eye size={16} />
                     Show
-                  </button>
+                  </a>
 
-                  <button
+                  <a
                     className="btn btn-sm btn-success text-white"
                     onClick={() => openDrawer(d)}
                   >
                     <PackageCheck size={16} />
                     Delivered
-                  </button>
+                  </a>
 
-                  <button
+                  <a
                     className="btn btn-sm btn-warning text-white"
                     onClick={() => onReturnDelivery && onReturnDelivery(d.id)}
                   >
                     <RotateCcw size={16} />
                     Return
-                  </button>
+                  </a>
                 </div>
               </div>
 
@@ -113,46 +113,46 @@ export default function DeliveryList({
         <div className="bg-base-100 border-t rounded-t-2xl shadow-xl p-5 max-w-xl mx-auto">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold">Mark as Delivered</h3>
-            <button
+            <a
               className="btn btn-ghost btn-sm"
               onClick={() => setDrawerOpen(false)}
             >
               Close
-            </button>
+            </a>
           </div>
 
           {selected && (
             <>
               <p className="text-sm mb-3">
                 Delivering to:{" "}
-                <span className="font-semibold">{selected.name}</span>
+                <span className="font-semibold">{selected.customerId.name}</span>
               </p>
 
               {/* PAYMENT TYPE */}
               <label className="label font-semibold">Payment Type</label>
               <div className="flex gap-2 mb-5">
-                <button
+                <a
                   className={`btn flex-1 ${
                     paymentType === "cash" ? "btn-primary" : "btn-outline"
                   }`}
                   onClick={() => setPaymentType("cash")}
                 >
                   Cash
-                </button>
+                </a>
 
-                <button
+                <a
                   className={`btn flex-1 ${
                     paymentType === "gcash" ? "btn-primary" : "btn-outline"
                   }`}
                   onClick={() => setPaymentType("gcash")}
                 >
                   GCash
-                </button>
+                </a>
               </div>
 
               {/* ACTION BUTTONS */}
               <div className="flex justify-end gap-2">
-                <button
+                <a
                   className="btn"
                   onClick={() => {
                     setDrawerOpen(false);
@@ -160,10 +160,10 @@ export default function DeliveryList({
                   }}
                 >
                   Cancel
-                </button>
-                <button className="btn btn-primary" onClick={submitMark}>
+                </a>
+                <a className="btn btn-primary" onClick={submitMark}>
                   Submit
-                </button>
+                </a>
               </div>
             </>
           )}
