@@ -40,14 +40,10 @@ export const useCustomerStore = create((set, get) => ({
     },
 
     // UPDATE CUSTOMER
-    updateCustomer: async (customerId, payload) => {
+    updateCustomer: async (payload) => {
         try {
             set({ loading: true });
-
-            const res = await axios.put("/customer", {
-                customerId,
-                ...payload,
-            });
+            const res = await axios.put("/customer", payload); // payload contains customerId + fields
 
             const updated = res.data.updatedCustomer;
 
@@ -66,10 +62,13 @@ export const useCustomerStore = create((set, get) => ({
         }
     },
 
+
+
     // ADD DELIVERY (optional handler based on your earlier UI)
     addDelivery: async (data) => {
         try {
             set({ loading: true });
+
             await axios.post("/delivery", data);
             set({ loading: false });
 

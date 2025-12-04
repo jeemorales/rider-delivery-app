@@ -45,7 +45,7 @@ const Dashboard = () => {
   const handleDeliveriesUpdate = (updatedList) => {
     setDeliveries(updatedList);
   };
-
+  
   return (
     <div>
       <main className="p-3 md:p-6 max-w-6xl mx-auto space-y-4">

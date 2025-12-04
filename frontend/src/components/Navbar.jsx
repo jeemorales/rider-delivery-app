@@ -61,7 +61,7 @@ const Navbar = () => {
                 <>
                   <option value="/">Dashboard</option>
                   <option value="/customers">Customers</option>
-                  <option value="/delivery">Delivery</option>
+                  <option value="/delivery">Deliveries</option>
                   <option value="logout">Logout</option>
                 </>
               ) : (

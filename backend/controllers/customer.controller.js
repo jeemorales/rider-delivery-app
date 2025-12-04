@@ -16,9 +16,8 @@ export const addCustomer = async (req, res) => {
             lng = 121.086929; // default LONG
         }
 
-        const customerExist = await Customer.findOne({ phone });
-        if (customerExist)
-            return res.status(400).json({ message: "Customer already exists" });
+        const customerExist = await Customer.findOne({ name, phone });
+        if (customerExist) return res.status(400).json({ message: "Customer already exists" });
 
         const customer = await Customer.create({
             userId,
@@ -56,26 +55,33 @@ export const getCustomers = async (req, res) => {
 
 export const updateCustomer = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { name, address, phone, lat, lng, remarks, customerId } = req.body;
+        const { customerId, name, address, phone, lat, lng, remarks } = req.body;
+        console.log("Customerid:",customerId)
+        if (!customerId) {
+            return res.status(400).json({ message: "Customer ID required" });
+        }
 
         if (!name || !address) {
-            return res.status(400).json({ message: "Please provide required fields" });
+            return res.status(400).json({ message: "Name and Address required" });
         }
 
         const updatedCustomer = await Customer.findOneAndUpdate(
-            { _id: customerId, userId: userId},
-            req.body,
+            { _id: customerId },
+            { name, address, phone, lat, lng, remarks },
             { new: true }
         );
-        if (!updatedCustomer) return res.status(400).json({ message: "Customer not found" });
 
-        res.status(201).json({
+        if (!updatedCustomer) {
+            return res.status(404).json({ message: "Customer not found" });
+        }
+
+        res.status(200).json({
             updatedCustomer,
-            message: "Customer details update successfully",
+            message: "Customer updated successfully"
         });
-    } catch (error) {
-        console.log("Error in updateCustomer controller", error.message);
-		res.status(500).json({ message: "Server error", error: error.message });
+
+    } catch (err) {
+        console.log("Error in updateCustomer:", err.message);
+        res.status(500).json({ message: "Server error", error: err.message });
     }
-} ;
+};

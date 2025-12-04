@@ -14,7 +14,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-// Click Map to pick location
+// Click map to pick location
 function MapClickPicker({ onPick }) {
   useMapEvents({
     click(e) {
@@ -26,7 +26,7 @@ function MapClickPicker({ onPick }) {
 
 export default function CustomersPage() {
   const formRef = useRef(null);
-  const mapRef = useRef(null); // ⭐ NEW: map reference
+  const mapRef = useRef(null);
 
   const emptyForm = {
     name: "",
@@ -44,16 +44,17 @@ export default function CustomersPage() {
   const [deliverForId, setDeliverForId] = useState(null);
   const [deliveryPaymentType, setDeliveryPaymentType] = useState("");
   const [deliveryAmount, setDeliveryAmount] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const { customers, fetchCustomers, addCustomer, updateCustomer, addDelivery } =
     useCustomerStore();
 
-  // LOAD CUSTOMERS
+  // Fetch customers
   useEffect(() => {
     fetchCustomers();
   }, []);
 
-  // Update Lat/Lng when picking on map
+  // Whenever user picks on map
   useEffect(() => {
     if (mapPick) {
       setForm((f) => ({
@@ -68,30 +69,25 @@ export default function CustomersPage() {
     }
   }, [mapPick]);
 
-  // ⭐ USE DEVICE GPS
+  // Use device GPS
   const handleUseMyLocation = () => {
-    if (!navigator.geolocation) {
-      return toast.error("Geolocation not supported");
-    }
+    if (!navigator.geolocation) return toast.error("Geolocation not supported");
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
-        // Update form
         setForm((f) => ({
           ...f,
           lat: lat.toFixed(6),
           lng: lng.toFixed(6),
         }));
 
-        // ⭐ Move map to location
         if (mapRef.current) {
           mapRef.current.setView([lat, lng], 16);
         }
 
-        // ⭐ Also update mapPick so marker shows immediately
         setMapPick({ lat, lng });
       },
       (err) => toast.error("GPS Error: " + err.message),
@@ -99,9 +95,10 @@ export default function CustomersPage() {
     );
   };
 
-  // SUBMIT FORM
+  // Submit Form
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
 
     const payload = {
       ...form,
@@ -110,17 +107,19 @@ export default function CustomersPage() {
     };
 
     if (editingId) {
-      updateCustomer({ ...payload, customerId: editingId });
+      payload.customerId = editingId;
+      await updateCustomer(payload);
       setEditingId(null);
     } else {
-      addCustomer(payload);
+      await addCustomer(payload);
     }
 
     setForm(emptyForm);
     setMapPick(null);
+    setSaving(false);
   };
 
-  // PRE-FILL EDIT FORM
+  // Pre-fill edit fields
   const startEdit = (c) => {
     setEditingId(c._id);
     setForm({
@@ -139,8 +138,8 @@ export default function CustomersPage() {
     formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // SEARCH FILTER
-    const filtered = customers.filter((c) => {
+  // Search filter
+  const filtered = customers.filter((c) => {
     const s = query.toLowerCase();
     return (
       (c.name || "").toLowerCase().includes(s) ||
@@ -149,15 +148,23 @@ export default function CustomersPage() {
     );
   });
 
-
-  // SUBMIT DELIVERY
+  // Confirm delivery
   const confirmDelivery = async (cust) => {
     if (!deliveryPaymentType) return toast.error("Select payment status");
+
+    // Only require amount if unpaid
+    let amount = 0;
+    if (deliveryPaymentType === "unpaid") {
+      if (!deliveryAmount || isNaN(deliveryAmount) || Number(deliveryAmount) <= 0) {
+        return toast.error("Please input a valid amount for unpaid delivery");
+      }
+      amount = Number(deliveryAmount);
+    }
 
     await addDelivery({
       customerId: cust._id,
       paid: deliveryPaymentType === "paid",
-      amount: deliveryPaymentType === "unpaid" ? Number(deliveryAmount) : 0,
+      amount,
     });
 
     setDeliveryPaymentType("");
@@ -193,19 +200,26 @@ export default function CustomersPage() {
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
           />
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <input
               className="input input-bordered"
               placeholder="Latitude"
+              disabled
               value={form.lat}
-              onChange={(e) => setForm({ ...form, lat: e.target.value })}
             />
             <input
               className="input input-bordered"
               placeholder="Longitude"
               value={form.lng}
-              onChange={(e) => setForm({ ...form, lng: e.target.value })}
+              disabled
             />
+            <a
+              type="button"
+              className="btn btn-primary"
+              onClick={handleUseMyLocation}
+            >
+              Use My Location
+            </a>
           </div>
 
           <textarea
@@ -215,13 +229,23 @@ export default function CustomersPage() {
             onChange={(e) => setForm({ ...form, remarks: e.target.value })}
           />
 
-          <button className="btn btn-primary w-full" type="submit">
-            {editingId ? "Update" : "Save"}
+          <button
+            className="btn btn-primary w-full"
+            type="submit"
+            disabled={saving}
+          >
+            {saving
+              ? editingId
+                ? "Updating..."
+                : "Saving..."
+              : editingId
+              ? "Update"
+              : "Save"}
           </button>
 
-          <button
+          <a
             type="button"
-            className="btn btn-outline w-full"
+            className="btn btn-ghost w-full"
             onClick={() => {
               setForm(emptyForm);
               setEditingId(null);
@@ -229,16 +253,7 @@ export default function CustomersPage() {
             }}
           >
             Clear
-          </button>
-
-          {/* ⭐ USE MY LOCATION BUTTON */}
-          <button
-            type="button"
-            className="btn btn-primary btn-sm mt-2"
-            onClick={handleUseMyLocation}
-          >
-            Use My Location
-          </button>
+          </a>
         </form>
       </div>
 
@@ -254,13 +269,11 @@ export default function CustomersPage() {
           }
           zoom={13}
           className="w-full h-64 rounded"
-          whenCreated={(map) => (mapRef.current = map)} // ⭐ store map instance
+          whenCreated={(map) => (mapRef.current = map)}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
           <MapClickPicker onPick={setMapPick} />
 
-          {/* Marker renders whenever lat/lng exist */}
           {form.lat && form.lng && (
             <Marker position={[Number(form.lat), Number(form.lng)]}>
               <Popup>Selected Location</Popup>
@@ -285,31 +298,29 @@ export default function CustomersPage() {
             <div key={c._id} className="card bg-base-100 p-3 border">
               <div className="flex justify-between">
                 <div>
-                  <div className="font-semibold">{c.name}</div>
+                  <div className="font-semibold ">{c.name}</div>
                   <div className="text-xs text-muted">{c.address}</div>
-                  <div className="text-xs">{c.phone}</div>
+                  <div className="text-xs">{c.phone || "09**********"}</div>
                   <div className="text-xs mt-1">{c.remarks}</div>
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <button className="btn btn-sm" onClick={() => startEdit(c)}>
+                  <a className="btn btn-sm" onClick={() => startEdit(c)}>
                     <Pencil size={16} /> Edit
-                  </button>
+                  </a>
 
-                  <button
+                  <a
                     className="btn btn-sm btn-success"
                     onClick={() => setDeliverForId(c._id)}
                   >
-                    <PackagePlus size={16} /> Add Delivery
-                  </button>
+                    <PackagePlus size={16} /> Deliver
+                  </a>
                 </div>
               </div>
 
               {deliverForId === c._id && (
                 <div className="mt-3 p-3 bg-base-200 rounded">
-                  <label className="label-text font-medium">
-                    Payment Status
-                  </label>
+                  <label className="label-text font-medium">Payment Status</label>
 
                   <label className="flex items-center gap-2 mt-2">
                     <input
@@ -318,7 +329,7 @@ export default function CustomersPage() {
                       checked={deliveryPaymentType === "paid"}
                       onChange={() => {
                         setDeliveryPaymentType("paid");
-                        setDeliveryAmount("");
+                        setDeliveryAmount(""); // reset amount
                       }}
                     />
                     Paid
@@ -345,12 +356,9 @@ export default function CustomersPage() {
                   )}
 
                   <div className="flex justify-end gap-2 mt-3">
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => setDeliverForId(null)}
-                    >
+                    <a className="btn btn-sm" onClick={() => setDeliverForId(null)}>
                       Cancel
-                    </button>
+                    </a>
                     <button
                       className="btn btn-sm btn-primary"
                       onClick={() => confirmDelivery(c)}

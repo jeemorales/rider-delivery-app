@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { CheckCircle, Eye, PackageCheck, RotateCcw } from "lucide-react";
+import { Phone, CheckCircle, Eye, PackageCheck, RotateCcw } from "lucide-react";
+import { useDeliveryStore } from "../stores/useDeliveryStore";
+import { Toaster } from "react-hot-toast";
 
 export default function DeliveryList({
   deliveries = [],
@@ -11,18 +13,38 @@ export default function DeliveryList({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [paymentType, setPaymentType] = useState("cash");
+  const [showPayment, setShowPayment] = useState(false); // NEW: toggle payment type
 
   const openDrawer = (delivery) => {
     setSelected(delivery);
     setPaymentType("cash");
+    setShowPayment(false); // reset payment view
     setDrawerOpen(true);
   };
 
+  const handleMarkDeliveredClick = () => {
+    setShowPayment(true); // show payment type selection
+  };
+
+  const {markAsDelivered} = useDeliveryStore();
   const submitMark = () => {
     if (!selected) return;
-    onMarkDelivered && onMarkDelivered(selected.id, paymentType);
+    onMarkDelivered && onMarkDelivered(selected._id, paymentType);
+    markAsDelivered(selected._id, paymentType);
     setDrawerOpen(false);
     setSelected(null);
+    setShowPayment(false);
+  };
+
+  const { markAsReturned } = useDeliveryStore();
+  const handleReturn = () => {
+    if (!selected) return;
+    
+    onReturnDelivery && onReturnDelivery(selected._id);
+    markAsReturned(selected._id);
+    setDrawerOpen(false);
+    setSelected(null);
+    setShowPayment(false);
   };
 
   return (
@@ -37,6 +59,7 @@ export default function DeliveryList({
 
         {deliveries.map((d) => {
           const isNearest = d._id === nearestDeliveryId;
+          const customer = d.customerId || {};
 
           return (
             <div
@@ -48,14 +71,11 @@ export default function DeliveryList({
               <div className="flex justify-between gap-4">
                 {/* INFO */}
                 <div className="flex-1">
-                  <h2 className="font-semibold text-lg">{d.customerId.name}</h2>
-                  <p className="text-sm opacity-70">{d.customerId.address}</p>
-                  <p className="text-sm">{d.customerId.phone}</p>
-
-                  {d.customerId.remarks && (
-                    <p className="text-xs mt-1 italic opacity-75">
-                      {d.customerId.remarks}
-                    </p>
+                  <h2 className="font-semibold text-lg">{customer.name}</h2>
+                  <p className="text-sm opacity-70">{customer.address}</p>
+                  <p className="text-sm">{customer.phone || "09*******"}</p>
+                  {customer.remarks && (
+                    <p className="text-xs mt-1 italic opacity-75">{customer.remarks}</p>
                   )}
                 </div>
 
@@ -70,32 +90,34 @@ export default function DeliveryList({
                   </a>
 
                   <a
-                    className="btn btn-sm btn-success text-white"
+                    className="btn btn-sm btn-primary text-white"
                     onClick={() => openDrawer(d)}
                   >
                     <PackageCheck size={16} />
-                    Delivered
+                    Status
                   </a>
 
-                  <a
-                    className="btn btn-sm btn-warning text-white"
-                    onClick={() => onReturnDelivery && onReturnDelivery(d.id)}
-                  >
-                    <RotateCcw size={16} />
-                    Return
-                  </a>
+                  {customer.phone > 0 && (
+                    <a
+                      href={`tel:${customer.phone}`}
+                      className="btn btn-sm btn-success text-white flex items-center gap-2"
+                    >
+                      <Phone size={18} />
+                      Call
+                    </a>
+                  )}
                 </div>
               </div>
 
               {/* PAYMENT STATUS */}
               <div className="mt-3">
-                {d.paid ? (
-                  <span className="text-green-500 font-medium flex items-center gap-1">
-                    <CheckCircle size={18} /> Paid
+                {d.amount > 0 ? (
+                  <span className="text-red-400 font-medium">
+                    Amount Due: ₱{d.amount}.00
                   </span>
                 ) : (
-                  <span className="text-red-400 font-medium">
-                    Amount Due: ₱{d.amount || 0}.00
+                  <span className="text-green-300 font-medium flex items-center gap-1">
+                    <CheckCircle size={18} /> Paid
                   </span>
                 )}
               </div>
@@ -112,7 +134,7 @@ export default function DeliveryList({
       >
         <div className="bg-base-100 border-t rounded-t-2xl shadow-xl p-5 max-w-xl mx-auto">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold">Mark as Delivered</h3>
+            <h3 className="text-lg font-bold">Delivery Actions</h3>
             <a
               className="btn btn-ghost btn-sm"
               onClick={() => setDrawerOpen(false)}
@@ -128,47 +150,67 @@ export default function DeliveryList({
                 <span className="font-semibold">{selected.customerId.name}</span>
               </p>
 
-              {/* PAYMENT TYPE */}
-              <label className="label font-semibold">Payment Type</label>
-              <div className="flex gap-2 mb-5">
-                <a
-                  className={`btn flex-1 ${
-                    paymentType === "cash" ? "btn-primary" : "btn-outline"
-                  }`}
-                  onClick={() => setPaymentType("cash")}
-                >
-                  Cash
-                </a>
+              {/* SHOW DELIVERED / RETURN BUTTONS OR PAYMENT SELECTION */}
+              {!showPayment ? (
+                <div className="flex flex-col sm:flex-row gap-2 mb-5">
+                  <a
+                    className="btn btn-primary flex-2"
+                    onClick={handleMarkDeliveredClick}
+                  >
+                    <CheckCircle size={16} /> Mark as Delivered
+                  </a>
+                  <a
+                    className="btn btn-ghost flex-2"
+                    onClick={handleReturn}
+                  >
+                    <RotateCcw size={16} /> Return
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <label className="label font-semibold">Payment Type</label>
+                  <div className="flex gap-2 mb-5">
+                    <a
+                      className={`btn flex-1 ${
+                        paymentType === "cash" ? "btn-primary" : "btn-outline"
+                      }`}
+                      onClick={() => setPaymentType("cash")}
+                    >
+                      Cash
+                    </a>
 
-                <a
-                  className={`btn flex-1 ${
-                    paymentType === "gcash" ? "btn-primary" : "btn-outline"
-                  }`}
-                  onClick={() => setPaymentType("gcash")}
-                >
-                  GCash
-                </a>
-              </div>
+                    <a
+                      className={`btn flex-1 ${
+                        paymentType === "gcash" ? "btn-primary" : "btn-outline"
+                      }`}
+                      onClick={() => setPaymentType("gcash")}
+                    >
+                      GCash
+                    </a>
+                  </div>
 
-              {/* ACTION BUTTONS */}
-              <div className="flex justify-end gap-2">
-                <a
-                  className="btn"
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    setSelected(null);
-                  }}
-                >
-                  Cancel
-                </a>
-                <a className="btn btn-primary" onClick={submitMark}>
-                  Submit
-                </a>
-              </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        setDrawerOpen(false);
+                        setSelected(null);
+                        setShowPayment(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <a className="btn btn-primary" onClick={submitMark}>
+                      Submit
+                    </a>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </div>
+      <Toaster />
     </div>
   );
 }

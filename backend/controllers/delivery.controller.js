@@ -41,7 +41,6 @@ export const addDelivery = async (req, res) => {
 export const getRiderDeliveries = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(userId)
     const deliveries = await Delivery.find(
       { userId, 
         status: "out-for-delivery", 
@@ -72,7 +71,6 @@ export const getDeliveryHistory = async (req, res) => {
     })
       .populate("customerId")
       .sort({ updatedAt: -1 });
-
     res.json(deliveries);
   } catch (error) {
     console.log("Error in getDeliveryHistory controller:", error.message);
@@ -84,7 +82,7 @@ export const getDeliveryHistory = async (req, res) => {
 //MARK AS DELIVERED
 export const markAsDelivered = async (req, res) => {
   try {
-    const { paymentMethod, amount, deliveryId } = req.body;
+    const { paymentMethod, deliveryId } = req.body;
 
     if (!paymentMethod || !["cash", "gcash"].includes(paymentMethod)) {
       return res.status(400).json({ message: "Valid payment method required (cash or gcash)." });
@@ -96,7 +94,6 @@ export const markAsDelivered = async (req, res) => {
     delivery.status = "delivered";
     delivery.isPaid = true;
     delivery.paymentMethod = paymentMethod;
-    delivery.amount = amount || delivery.amount;
     
     await delivery.save();
 
@@ -110,8 +107,7 @@ export const markAsDelivered = async (req, res) => {
 //MARK AS RETURNED (FAILED DELIVERY)
 export const markAsReturned = async (req, res) => {
   try {
-    const {deliveryId}= req.body;
-
+    const { deliveryId }= req.body;
     const delivery = await Delivery.findById(deliveryId);
     if (!delivery) return res.status(404).json({ message: "Delivery not found." });
 

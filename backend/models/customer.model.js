@@ -18,6 +18,7 @@ const customerSchema = new mongoose.Schema({
     },
     phone: {
         type: Number,
+        unique: true,
     },
     lat: {
         type: Number,

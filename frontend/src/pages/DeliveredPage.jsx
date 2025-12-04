@@ -1,232 +1,165 @@
-import React, { useState, useMemo } from "react";
+// src/pages/DeliveredPage.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import { useDeliveryStore } from "../stores/useDeliveryStore";
 
-export default function DeliveredPage({ delivered = [], onUpdate }) {
-  const [openSummary, setOpenSummary] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false);
+export default function DeliveredPage() {
+    const { delivered, fetchAllDelivered } = useDeliveryStore();
+    const [openSummary, setOpenSummary] = useState(false);
+    const [filter, setFilter] = useState("all"); // all, cash, gcash, returned
 
-  const [selected, setSelected] = useState(null);
-  const [editAmount, setEditAmount] = useState("");
-  const [editPaymentType, setEditPaymentType] = useState("cash");
+    // ---------------------
+    // FETCH DELIVERED ITEMS ON LOAD
+    // ---------------------
+    useEffect(() => {
+        fetchAllDelivered();
+    }, [fetchAllDelivered]);
 
-  // Compute totals
-  const totals = useMemo(() => {
-    const cashItems = delivered.filter((d) => d.paymentType === "cash");
-    const gcashItems = delivered.filter((d) => d.paymentType === "gcash");
-    const returnItems = delivered.filter((d) => d.paymentType === "return");
+    // ---------------------
+    // COMPUTE TOTALS
+    // ---------------------
+    const totals = useMemo(() => {
+        const cashItems = delivered.filter(d => d.paymentMethod === "cash");
+        const gcashItems = delivered.filter(d => d.paymentMethod === "gcash");
+        const returnItems = delivered.filter(d => d.status === "returned");
 
-    const cash = {
-      count: cashItems.length,
-      total: cashItems.reduce((sum, d) => sum + (d.amount || 0), 0),
+        const cashTotal = cashItems.reduce((sum, d) => sum + (d.amount || 0), 0);
+        const gcashTotal = gcashItems.reduce((sum, d) => sum + (d.amount || 0), 0);
+        const returnTotal = returnItems.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+        return {
+            cash: { count: cashItems.length, total: cashTotal },
+            gcash: { count: gcashItems.length, total: gcashTotal },
+            returned: { count: returnItems.length, total: returnTotal },
+            grandTotal: cashTotal + gcashTotal + returnTotal,
+            totalDelivered: delivered.length,
+        };
+    }, [delivered]);
+
+    // ---------------------
+    // FILTERED DELIVERED
+    // ---------------------
+    const filteredDelivered = useMemo(() => {
+        if (filter === "all") return delivered;
+        if (filter === "cash") return delivered.filter(d => d.paymentMethod === "cash");
+        if (filter === "gcash") return delivered.filter(d => d.paymentMethod === "gcash");
+        if (filter === "returned") return delivered.filter(d => d.status === "returned");
+        return delivered;
+    }, [delivered, filter]);
+
+    // ---------------------
+    // DATE FORMATTING
+    // ---------------------
+    const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        const options = { year: "numeric", month: "long", day: "numeric" };
+        return date.toLocaleDateString(undefined, options);
     };
 
-    const gcash = {
-      count: gcashItems.length,
-      total: gcashItems.reduce((sum, d) => sum + (d.amount || 0), 0),
-    };
+    // ---------------------
+    // RENDER
+    // ---------------------
+    if (!delivered || delivered.length === 0) {
+        return <div className="card p-6 bg-base-200 text-center">No delivered items yet.</div>;
+    }
 
-    const returned = {
-      count: returnItems.length,
-      total: returnItems.reduce((sum, d) => sum + (d.amount || 0), 0),
-    };
+    return (
+        <div className="space-y-6 p-2 sm:p-4 md:p-6">
 
-    return {
-      cash,
-      gcash,
-      returned,
-      totalDelivered: delivered.length,
-    };
-  }, [delivered]);
+            {/* Header with Filter & Summary */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h2 className="text-xl sm:text-2xl font-semibold">Delivered</h2>
 
-  // ---------------------
-  // OPEN EDIT MODAL
-  // ---------------------
-  const openEditModal = (item) => {
-    setSelected(item);
-    setEditAmount(item.amount);
-    setEditPaymentType(item.paymentType);
-    setOpenEdit(true);
-  };
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    {/* Filter Dropdown */}
+                    <div className="dropdown">
+                        <label tabIndex={0} className="btn btn-outline btn-sm">
+                            Filter
+                        </label>
+                        <ul tabIndex={0} className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32">
+                            <li onClick={() => setFilter("all")}><a>All</a></li>
+                            <li onClick={() => setFilter("cash")}><a>Cash</a></li>
+                            <li onClick={() => setFilter("gcash")}><a>GCash</a></li>
+                            <li onClick={() => setFilter("returned")}><a>Returned</a></li>
+                        </ul>
+                    </div>
 
-  // ---------------------
-  // SAVE EDIT
-  // ---------------------
-  const handleSaveEdit = () => {
-    const updated = {
-      ...selected,
-      amount: Number(editAmount),
-      paymentType: editPaymentType,
-    };
-
-    onUpdate(updated); // parent handles state update
-
-    setOpenEdit(false);
-  };
-
-  // ---------------------
-  // RENDER
-  // ---------------------
-  if (!delivered || delivered.length === 0) {
-    return <div className="card p-4 bg-base-200">No delivered items yet.</div>;
-  }
-
-  return (
-    <div className="space-y-5">
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Delivered</h2>
-        <button className="btn btn-primary btn-sm" onClick={() => setOpenSummary(true)}>
-          Remit
-        </button>
-      </div>
-
-      {/* Delivered Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {delivered.map((d) => (
-          <div key={d.id} className="card bg-base-100 shadow-md">
-            <div className="card-body p-4">
-
-              {/* Info */}
-              <div className="flex justify-between">
-                <div>
-                  <div className="font-medium text-base">{d.name}</div>
-                  <div className="text-xs opacity-70">{d.address}</div>
-                  <div className="text-xs">Amount: ₱{d.amount}</div>
-                  <div className="text-xs">Phone: {d.phone || "-"}</div>
-                  <div className="text-xs opacity-70">
-                    Remarks: {d.remarks || "-"}
-                  </div>
+                    {/* Summary Button */}
+                    <a 
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setOpenSummary(true)}
+                    >
+                        Summary
+                    </a>
                 </div>
-
-                <div className="text-right text-xs">
-                  <div>{new Date(d.deliveredAt).toLocaleString()}</div>
-
-                  <div className="mt-2 font-semibold text-sm">
-                    {d.paymentType === "cash" && (
-                      <span className="text-green-300">Cash</span>
-                    )}
-                    {d.paymentType === "gcash" && (
-                      <span className="text-blue-300">GCash</span>
-                    )}
-                    {d.paymentType === "return" && (
-                      <span className="text-red-300">Return</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* EDIT BUTTON */}
-              <div className="flex justify-end">
-                <button
-                  onClick={() => openEditModal(d)}
-                  className="btn btn-sm btn-outline btn-primary"
-                >
-                  Edit
-                </button>
-              </div>
-
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* --------------------- */}
-      {/* SUMMARY MODAL */}
-      {/* --------------------- */}
-      {openSummary && (
-        <dialog className="modal modal-open">
-          <div className="modal-box space-y-4">
-
-            <h3 className="font-bold text-lg">Remittance Summary</h3>
-
-            <div className="space-y-2 text-sm">
-
-              <div className="flex justify-between">
-                <span>Total Cash ({totals.cash.count} pax)</span>
-                <span className="text-green-300 font-bold">₱{totals.cash.total}.00</span>
-              </div>
-
-              <div className="flex justify-between">
-                <span>Total GCash ({totals.gcash.count} pax)</span>
-                <span className="text-blue-300 font-bold">₱{totals.gcash.total}.00</span>
-              </div>
-
-              <div className="flex justify-between">
-                <span>Total Returned ({totals.returned.count} pax)</span>
-                <span className="text-red-300 font-bold">₱{totals.returned.total}.00</span>
-              </div>
-
-              <div className="divider"></div>
-
-              <div className="flex justify-between font-semibold">
-                <span>Total Deliveries ({totals.totalDelivered} pax)</span>
-                <span>
-                  ₱
-                  {totals.cash.total +
-                    totals.gcash.total +
-                    totals.returned.total}
-                  .00
-                </span>
-              </div>
             </div>
 
-            <div className="modal-action">
-              <button className="btn btn-primary" onClick={() => setOpenSummary(false)}>
-                Close
-              </button>
+            {/* Delivered Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredDelivered.map((d) => (
+                    <div key={d._id} className="card bg-base-100 shadow-md hover:shadow-lg transition-shadow border border-base-200 rounded-lg">
+                        <div className="card-body p-4">
+
+                            {/* Name & Amount */}
+                            <div className="flex justify-between items-center">
+                                <div className="font-medium text-base">{d.customerId?.name}</div>
+                                <div className="font-semibold text-base">₱{d.amount || 0}.00</div>
+                            </div>
+
+                            {/* Date */}
+                            <div className="text-xs opacity-70 mt-1">
+                                {formatDate(d.createdAt)}
+                            </div>
+
+                            {/* Status & Payment Badges */}
+                            <div className="flex justify-between mt-2 items-center gap-2 text-sm flex-wrap">
+                                <span className={`badge ${d.status === "returned" ? "badge-error" : "badge-success"} badge-outline`}>
+                                    {d.status === "returned" ? "Returned" : "Delivered"}
+                                </span>
+
+                                {(d.paymentMethod === "cash" || d.paymentMethod === "gcash") && (
+                                    <span className={`badge ${d.paymentMethod === "cash" ? "badge-success" : "badge-info"} badge-outline`}>
+                                        {d.paymentMethod === "cash" ? "Cash" : "GCash"}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-          </div>
-        </dialog>
-      )}
+            {/* SUMMARY MODAL */}
+            {openSummary && (
+                <dialog className="modal modal-open">
+                    <div className="modal-box space-y-4 p-6">
+                        <h3 className="font-bold text-lg">Remittance Summary</h3>
 
-      {/* --------------------- */}
-      {/* EDIT MODAL (MODAL B) */}
-      {/* --------------------- */}
-      {openEdit && (
-        <dialog className="modal modal-open">
-          <div className="modal-box space-y-4">
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between items-center">
+                                <span>Cash ({totals.cash.count} pax)</span>
+                                <span className="text-green-500 font-bold">₱{totals.cash.total}.00</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span>GCash ({totals.gcash.count} pax)</span>
+                                <span className="text-blue-500 font-bold">₱{totals.gcash.total}.00</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span>Returned ({totals.returned.count} pax)</span>
+                                <span className="text-red-500 font-bold">₱{totals.returned.total}.00</span>
+                            </div>
 
-            <h3 className="font-bold text-lg">Edit Delivery</h3>
+                            <div className="divider"></div>
+                            <div className="flex justify-between font-semibold text-lg">
+                                <span>Grand Total</span>
+                                <span>₱{totals.grandTotal}.00</span>
+                            </div>
+                        </div>
 
-            {/* Amount */}
-            <div>
-              <label className="label text-sm">Amount</label>
-              <input
-                type="number"
-                className="input input-bordered w-full"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-              />
-            </div>
-
-            {/* Payment Type */}
-            <div>
-              <label className="label text-sm">Payment Type</label>
-              <select
-                className="select select-bordered w-full"
-                value={editPaymentType}
-                onChange={(e) => setEditPaymentType(e.target.value)}
-              >
-                <option value="cash">Cash</option>
-                <option value="gcash">GCash</option>
-                <option value="return">Return</option>
-              </select>
-            </div>
-
-            <div className="modal-action">
-              <button className="btn" onClick={() => setOpenEdit(false)}>
-                Cancel
-              </button>
-
-              <button className="btn btn-primary" onClick={handleSaveEdit}>
-                Save Changes
-              </button>
-            </div>
-
-          </div>
-        </dialog>
-      )}
-    </div>
-  );
+                        <div className="modal-action">
+                            <button className="btn btn-primary w-full sm:w-auto" onClick={() => setOpenSummary(false)}>Close</button>
+                        </div>
+                    </div>
+                </dialog>
+            )}
+        </div>
+    );
 }
