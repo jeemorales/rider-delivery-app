@@ -56,7 +56,7 @@ export const useDeliveryStore = create((set, get) => ({
             set({ delivered: res.data, loading: false });
         } catch (error) {
             set({ loading: false });
-            console.log("Fetch Deliver History Error:", error);
+            console.log("Fetch Delivery History Error:", error);
             toast.error(error.response?.data?.message || "Failed to load delivery history");
         }
     },
@@ -69,11 +69,12 @@ export const useDeliveryStore = create((set, get) => ({
             set({ loading: true });
             const res = await axios.put("/delivery/returned", { deliveryId });
 
-            // Update state locally
             set((state) => ({
                 deliveries: state.deliveries.filter(d => d._id !== deliveryId),
                 delivered: state.delivered.map(d =>
-                    d._id === deliveryId ? { ...d, status: "returned", paymentMethod: "return" } : d
+                    d._id === deliveryId
+                        ? { ...d, status: "returned", paymentMethod: "return" }
+                        : d
                 ),
                 loading: false,
             }));
@@ -92,23 +93,21 @@ export const useDeliveryStore = create((set, get) => ({
     markAsDelivered: async (deliveryId, paymentType) => {
         try {
             set({ loading: true });
-            const paymentMethod = paymentType
-            // Call backend endpoint for marking delivered
+
             const res = await axios.put("/delivery/delivered", {
                 deliveryId,
-                paymentMethod,
+                paymentMethod: paymentType,
             });
 
-            // Find delivery in list and update
             const delivery = get().deliveries.find(d => d._id === deliveryId);
+
             if (delivery) {
                 const updatedDelivery = {
                     ...delivery,
                     status: "delivered",
-                    paymentMethod,
+                    paymentMethod: paymentType,
                 };
 
-                // Remove from deliveries and add to delivered list
                 set((state) => ({
                     deliveries: state.deliveries.filter(d => d._id !== deliveryId),
                     delivered: [updatedDelivery, ...state.delivered],
@@ -122,6 +121,32 @@ export const useDeliveryStore = create((set, get) => ({
             set({ loading: false });
             console.log("Mark as Delivered Error:", error);
             toast.error(error.response?.data?.message || "Failed to update delivery");
+        }
+    },
+
+    // -------------------------
+    // DELETE DELIVERY
+    // -------------------------
+    deleteDelivery: async (deliveryId) => {
+        try {
+            set({ loading: true });
+            console.log(deliveryId)
+            await axios.delete(`/delivery/${deliveryId}`);
+
+            // Remove from UI immediately
+            set((state) => ({
+                deliveries: state.deliveries.filter(d => d._id !== deliveryId),
+                loading: false,
+            }));
+
+            toast.success("Delivery deleted");
+            return true;
+
+        } catch (error) {
+            set({ loading: false });
+            console.log("Delete Delivery Error:", error);
+            toast.error(error.response?.data?.message || "Failed to delete delivery");
+            return false;
         }
     },
 }));

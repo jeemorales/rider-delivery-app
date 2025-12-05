@@ -2,32 +2,29 @@ import React, { useEffect, useState } from "react";
 import DeliveryMap from "../components/DeliveryMap";
 import DeliveryList from "../components/DeliveryList";
 import DeliveryProgress from "../components/DeliveryProgress";
-import CustomersPage from "../pages/CustomersPage";
-import DeliveredPage from "../pages/DeliveredPage";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
 
 const Dashboard = () => {
   const {
     deliveries,
-    delivered,
     completedCount,
     setDeliveries,
-    addDelivery,
-    completeDelivery,
     fetchDeliveries,
     loading
   } = useDeliveryStore();
 
- const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState("dashboard");
+  const [selectedDelivery, setSelectedDelivery] = useState(null);
+  const [riderLocation, setRiderLocation] = useState(null);
 
-  // Optionally load deliveries from API on first load
+  // Load deliveries
   useEffect(() => {
     fetchDeliveries();
   }, []);
 
-
+  // Mark delivery as delivered
   const markAsDelivered = (deliveryId, paymentType) => {
-    const found = deliveries.find((d) => d.id === deliveryId);
+    const found = deliveries.find((d) => d._id === deliveryId);
     if (!found) return;
 
     const deliveredItem = {
@@ -36,16 +33,11 @@ const Dashboard = () => {
       paymentType,
     };
 
-    completeDelivery(deliveredItem);
+    setDeliveries(prev =>
+      prev.map(d => d._id === deliveryId ? deliveredItem : d)
+    );
   };
 
-  // -------------------------------------
-  // REORDER DELIVERIES (Drag + Drop)
-  // -------------------------------------
-  const handleDeliveriesUpdate = (updatedList) => {
-    setDeliveries(updatedList);
-  };
-  
   return (
     <div>
       <main className="p-3 md:p-6 max-w-6xl mx-auto space-y-4">
@@ -56,11 +48,32 @@ const Dashboard = () => {
               completed={completedCount}
             />
 
-            <section>
-              <h2 className="text-lg font-semibold mb-2">Map</h2>
+            <section className="space-y-2">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold">Map</h2>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) =>
+                          setRiderLocation({
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                          }),
+                        (err) => alert("GPS Error: " + err.message)
+                      );
+                    } else alert("GPS not available");
+                  }}
+                >
+                  My Location
+                </button>
+              </div>
+
               <DeliveryMap
                 deliveries={deliveries}
-                // selectedDelivery={deliveries}
+                selectedDelivery={selectedDelivery}
+                riderLocation={riderLocation}
               />
             </section>
 
@@ -70,13 +83,11 @@ const Dashboard = () => {
                 deliveries={deliveries}
                 onSelectDelivery={(d) => setSelectedDelivery(d)}
                 onMarkDelivered={markAsDelivered}
-                onDeliveriesUpdate={handleDeliveriesUpdate}
+                onDeliveriesUpdate={setDeliveries}
               />
             </section>
           </>
         )}
-
-      
       </main>
     </div>
   );

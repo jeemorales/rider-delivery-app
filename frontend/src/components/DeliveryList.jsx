@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Phone, CheckCircle, Eye, PackageCheck, RotateCcw } from "lucide-react";
+import { Phone, CheckCircle, Eye, PackageCheck, RotateCcw, Trash2 } from "lucide-react";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
 import { Toaster } from "react-hot-toast";
 
@@ -9,24 +9,24 @@ export default function DeliveryList({
   onSelectDelivery,
   onMarkDelivered,
   onReturnDelivery, // optional handler
+  onDeleteDelivery,  // optional handler
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [paymentType, setPaymentType] = useState("cash");
-  const [showPayment, setShowPayment] = useState(false); // NEW: toggle payment type
+  const [showPayment, setShowPayment] = useState(false); // toggle payment type
 
   const openDrawer = (delivery) => {
     setSelected(delivery);
     setPaymentType("cash");
-    setShowPayment(false); // reset payment view
+    setShowPayment(false);
     setDrawerOpen(true);
   };
 
-  const handleMarkDeliveredClick = () => {
-    setShowPayment(true); // show payment type selection
-  };
+  const handleMarkDeliveredClick = () => setShowPayment(true);
 
-  const {markAsDelivered} = useDeliveryStore();
+  const { markAsDelivered, markAsReturned } = useDeliveryStore();
+
   const submitMark = () => {
     if (!selected) return;
     onMarkDelivered && onMarkDelivered(selected._id, paymentType);
@@ -36,10 +36,8 @@ export default function DeliveryList({
     setShowPayment(false);
   };
 
-  const { markAsReturned } = useDeliveryStore();
   const handleReturn = () => {
     if (!selected) return;
-    
     onReturnDelivery && onReturnDelivery(selected._id);
     markAsReturned(selected._id);
     setDrawerOpen(false);
@@ -47,9 +45,22 @@ export default function DeliveryList({
     setShowPayment(false);
   };
 
+  const { deleteDelivery, loading } = useDeliveryStore();
+
+  const handleDelete = async (deliveryId) => {
+    if (loading) return; // Prevent double click delete
+
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this delivery?"
+    );
+
+    if (!confirmDelete) return;
+
+    await deleteDelivery(deliveryId);
+  };
+
   return (
     <div className="p-3">
-      {/* GRID LIST */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {deliveries.length === 0 && (
           <div className="text-center text-sm text-base-content/60">
@@ -65,8 +76,7 @@ export default function DeliveryList({
             <div
               key={d._id}
               className={`card shadow-lg border rounded-lg p-4 transition-all duration-200 
-                ${isNearest ? "border-primary bg-base-300" : "bg-base-200"}
-              `}
+                ${isNearest ? "border-primary bg-base-300" : "bg-base-200"}`}
             >
               <div className="flex justify-between gap-4">
                 {/* INFO */}
@@ -82,7 +92,7 @@ export default function DeliveryList({
                 {/* BUTTONS */}
                 <div className="flex flex-col gap-2 shrink-0">
                   <a
-                    className="btn btn-sm btn-outline"
+                    className="btn btn-sm btn-outline flex items-center gap-1"
                     onClick={() => onSelectDelivery && onSelectDelivery(d)}
                   >
                     <Eye size={16} />
@@ -90,37 +100,48 @@ export default function DeliveryList({
                   </a>
 
                   <a
-                    className="btn btn-sm btn-primary text-white"
+                    className="btn btn-sm btn-primary text-white flex items-center gap-1"
                     onClick={() => openDrawer(d)}
                   >
                     <PackageCheck size={16} />
                     Status
                   </a>
 
-                  {customer.phone > 0 && (
-                    <a
-                      href={`tel:${customer.phone}`}
-                      className="btn btn-sm btn-success text-white flex items-center gap-2"
-                    >
-                      <Phone size={18} />
-                      Call
-                    </a>
-                  )}
+                  {/* Delete Button */}
+                  <button
+                    className="btn btn-sm btn-error text-white flex items-center gap-1"
+                    onClick={() => handleDelete(d._id)}
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
                 </div>
               </div>
 
               {/* PAYMENT STATUS */}
-              <div className="mt-3">
-                {d.amount > 0 ? (
-                  <span className="text-red-400 font-medium">
-                    Amount Due: ₱{d.amount}.00
-                  </span>
-                ) : (
-                  <span className="text-green-300 font-medium flex items-center gap-1">
-                    <CheckCircle size={18} /> Paid
-                  </span>
-                )}
-              </div>
+              <div className="mt-3 flex justify-between items-center">
+                  {/* Payment Status */}
+                  {d.amount > 0 ? (
+                    <span className="text-red-400 font-medium">
+                      Amount Due: ₱{d.amount}.00
+                    </span>
+                  ) : (
+                    <span className="text-green-500 font-medium flex items-center gap-1">
+                      <CheckCircle size={18} /> Paid
+                    </span>
+                  )}
+
+                  {/* Call Button */}
+                  {Number(customer.phone) > 0 && (
+                    <a
+                      href={`tel:${customer.phone}`}
+                      className="btn btn-sm btn-success text-white flex items-center gap-1"
+                    >
+                      <Phone size={16} />
+                      Call
+                    </a>
+                  )}
+                </div>
             </div>
           );
         })}
@@ -135,10 +156,7 @@ export default function DeliveryList({
         <div className="bg-base-100 border-t rounded-t-2xl shadow-xl p-5 max-w-xl mx-auto">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold">Delivery Actions</h3>
-            <a
-              className="btn btn-ghost btn-sm"
-              onClick={() => setDrawerOpen(false)}
-            >
+            <a className="btn btn-ghost btn-sm" onClick={() => setDrawerOpen(false)}>
               Close
             </a>
           </div>
@@ -150,19 +168,12 @@ export default function DeliveryList({
                 <span className="font-semibold">{selected.customerId.name}</span>
               </p>
 
-              {/* SHOW DELIVERED / RETURN BUTTONS OR PAYMENT SELECTION */}
               {!showPayment ? (
                 <div className="flex flex-col sm:flex-row gap-2 mb-5">
-                  <a
-                    className="btn btn-primary flex-2"
-                    onClick={handleMarkDeliveredClick}
-                  >
+                  <a className="btn btn-primary flex-2" onClick={handleMarkDeliveredClick}>
                     <CheckCircle size={16} /> Mark as Delivered
                   </a>
-                  <a
-                    className="btn btn-ghost flex-2"
-                    onClick={handleReturn}
-                  >
+                  <a className="btn btn-ghost flex-2" onClick={handleReturn}>
                     <RotateCcw size={16} /> Return
                   </a>
                 </div>
@@ -171,18 +182,14 @@ export default function DeliveryList({
                   <label className="label font-semibold">Payment Type</label>
                   <div className="flex gap-2 mb-5">
                     <a
-                      className={`btn flex-1 ${
-                        paymentType === "cash" ? "btn-primary" : "btn-outline"
-                      }`}
+                      className={`btn flex-1 ${paymentType === "cash" ? "btn-primary" : "btn-outline"}`}
                       onClick={() => setPaymentType("cash")}
                     >
                       Cash
                     </a>
 
                     <a
-                      className={`btn flex-1 ${
-                        paymentType === "gcash" ? "btn-primary" : "btn-outline"
-                      }`}
+                      className={`btn flex-1 ${paymentType === "gcash" ? "btn-primary" : "btn-outline"}`}
                       onClick={() => setPaymentType("gcash")}
                     >
                       GCash

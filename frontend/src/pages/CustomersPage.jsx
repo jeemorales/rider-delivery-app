@@ -24,6 +24,18 @@ function MapClickPicker({ onPick }) {
   return null;
 }
 
+// List of barangay suggestions
+const barangayOptions = [
+  "Liwayway",
+  "Barrio Militar",
+  "Camptinio",
+  "Cabanatuan",
+  "Patalac",
+  "Bangad",
+  "Mapalad",
+  "Malacañang"
+];
+
 export default function CustomersPage() {
   const formRef = useRef(null);
   const mapRef = useRef(null);
@@ -45,6 +57,9 @@ export default function CustomersPage() {
   const [deliveryPaymentType, setDeliveryPaymentType] = useState("");
   const [deliveryAmount, setDeliveryAmount] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Address suggestions
+  const [filteredAddresses, setFilteredAddresses] = useState([]);
 
   const { customers, fetchCustomers, addCustomer, updateCustomer, addDelivery } =
     useCustomerStore();
@@ -138,6 +153,21 @@ export default function CustomersPage() {
     formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Filter suggestions as user types
+  const handleAddressChange = (value) => {
+    setForm((f) => ({ ...f, address: value }));
+
+    if (!value) {
+      setFilteredAddresses([]);
+      return;
+    }
+
+    const filtered = barangayOptions.filter((b) =>
+      b.toLowerCase().includes(value.toLowerCase())
+    );
+    setFilteredAddresses(filtered);
+  };
+
   // Search filter
   const filtered = customers.filter((c) => {
     const s = query.toLowerCase();
@@ -187,12 +217,33 @@ export default function CustomersPage() {
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-          <input
-            className="input input-bordered w-full"
-            placeholder="Address"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-          />
+
+          {/* Address input with suggestions */}
+          <div className="relative">
+            <input
+              className="input input-bordered w-full"
+              placeholder="Address"
+              value={form.address}
+              onChange={(e) => handleAddressChange(e.target.value)}
+            />
+            {filteredAddresses.length > 0 && (
+              <div className="absolute z-10 bg-base-100 border w-full mt-1 rounded shadow">
+                {filteredAddresses.map((b) => (
+                  <div
+                    key={b}
+                    className="px-3 py-1 cursor-pointer hover:bg-base-200"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, address: b }));
+                      setFilteredAddresses([]);
+                    }}
+                  >
+                    {b}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <input
             className="input input-bordered w-full"
             placeholder="Phone"
@@ -250,6 +301,7 @@ export default function CustomersPage() {
               setForm(emptyForm);
               setEditingId(null);
               setMapPick(null);
+              setFilteredAddresses([]);
             }}
           >
             Clear
@@ -310,7 +362,7 @@ export default function CustomersPage() {
                   </a>
 
                   <a
-                    className="btn btn-sm btn-success"
+                    className="btn btn-sm btn-success text-white"
                     onClick={() => setDeliverForId(c._id)}
                   >
                     <PackagePlus size={16} /> Deliver

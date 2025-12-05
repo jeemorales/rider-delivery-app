@@ -52,6 +52,23 @@ export const getRiderDeliveries = async (req, res) => {
   }
 };
 
+export const deleteDelivery = async (req, res) => {
+  try {
+    const deliveryId = req.params.id;
+    const deleted = await Delivery.findByIdAndDelete(deliveryId);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Delivery not found" });
+    }
+
+    res.status(200).json({ message: "Delivery deleted successfully" });
+  } catch (error) {
+    console.log("Error in deleteDelivery controller:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 //GET RIDER DELIVERY HISTORY (DELIVERED + RETURNED - TODAY ONLY)
 export const getDeliveryHistory = async (req, res) => {
   try {
