@@ -3,150 +3,134 @@ import axios from "../lib/axios";
 import { toast } from "react-hot-toast";
 
 export const useDeliveryStore = create((set, get) => ({
-    deliveries: [],
-    delivered: [],
-    loading: false,
-    completedCount: 0,
+  deliveries: [],
+  delivered: [],
+  loading: false,
+  completedCount: 0,
 
-    // -------------------------
-    // SETTERS
-    // -------------------------
-    setDeliveries: (list) => set({ deliveries: list }),
-    setDelivered: (list) => set({ delivered: list }),
+  // -------------------------
+  // SETTERS
+  // -------------------------
+  setDeliveries: (list) => set({ deliveries: Array.isArray(list) ? list : [] }),
+  setDelivered: (list) => set({ delivered: Array.isArray(list) ? list : [] }),
 
-    addDelivery: (delivery) =>
-        set({ deliveries: [...get().deliveries, delivery] }),
+  addDelivery: (delivery) =>
+    set({ deliveries: [...(get().deliveries || []), delivery] }),
 
-    removeDelivery: (id) =>
-        set({ deliveries: get().deliveries.filter(d => d._id !== id) }),
+  removeDelivery: (id) =>
+    set({ deliveries: (get().deliveries || []).filter(d => d._id !== id) }),
 
-    completeDelivery: (delivery) =>
-        set({
-            delivered: [delivery, ...get().delivered],
-            completedCount: get().completedCount + 1,
-            deliveries: get().deliveries.filter(d => d._id !== delivery._id),
-        }),
+  completeDelivery: (delivery) =>
+    set({
+      delivered: [delivery, ...(get().delivered || [])],
+      completedCount: get().completedCount + 1,
+      deliveries: (get().deliveries || []).filter(d => d._id !== delivery._id),
+    }),
 
-    updateDelivered: (updatedDelivery) =>
-        set({
-            delivered: get().delivered.map((d) =>
-                d._id === updatedDelivery._id ? updatedDelivery : d
-            ),
-        }),
+  updateDelivered: (updatedDelivery) =>
+    set({
+      delivered: (get().delivered || []).map((d) =>
+        d._id === updatedDelivery._id ? updatedDelivery : d
+      ),
+    }),
 
-    // -------------------------
-    // FETCH FROM API
-    // -------------------------
-    fetchDeliveries: async () => {
-        try {
-            set({ loading: true });
-            const res = await axios.get("/delivery");
-            set({ deliveries: res.data, loading: false });
-        } catch (error) {
-            set({ loading: false });
-            console.log("Fetch Deliveries Error:", error);
-            toast.error(error.response?.data?.message || "Failed to load deliveries");
-        }
-    },
+  // -------------------------
+  // FETCH FROM API
+  // -------------------------
+  fetchDeliveries: async () => {
+    try {
+      set({ loading: true });
+      const res = await axios.get("/delivery");
+      set({ deliveries: Array.isArray(res.data) ? res.data : [], loading: false });
+    } catch (error) {
+      set({ loading: false });
+      console.log("Fetch Deliveries Error:", error);
+      toast.error(error.response?.data?.message || "Failed to load deliveries");
+    }
+  },
 
-    fetchAllDelivered: async () => {
-        try {
-            set({ loading: true });
-            const res = await axios.get("/delivery/history");
-            set({ delivered: res.data, loading: false });
-        } catch (error) {
-            set({ loading: false });
-            console.log("Fetch Delivery History Error:", error);
-            toast.error(error.response?.data?.message || "Failed to load delivery history");
-        }
-    },
+  fetchAllDelivered: async () => {
+    try {
+      set({ loading: true });
+      const res = await axios.get("/delivery/history");
+      set({ delivered: Array.isArray(res.data) ? res.data : [], loading: false });
+    } catch (error) {
+      set({ loading: false });
+      console.log("Fetch Delivery History Error:", error);
+      toast.error(error.response?.data?.message || "Failed to load delivery history");
+    }
+  },
 
-    // -------------------------
-    // MARK AS RETURNED
-    // -------------------------
-    markAsReturned: async (deliveryId) => {
-        try {
-            set({ loading: true });
-            const res = await axios.put("/delivery/returned", { deliveryId });
+  // -------------------------
+  // MARK AS RETURNED
+  // -------------------------
+  markAsReturned: async (deliveryId) => {
+    try {
+      set({ loading: true });
+      await axios.put("/delivery/returned", { deliveryId });
 
-            set((state) => ({
-                deliveries: state.deliveries.filter(d => d._id !== deliveryId),
-                delivered: state.delivered.map(d =>
-                    d._id === deliveryId
-                        ? { ...d, status: "returned", paymentMethod: "return" }
-                        : d
-                ),
-                loading: false,
-            }));
+      set((state) => ({
+        deliveries: (state.deliveries || []).filter(d => d._id !== deliveryId),
+        delivered: (state.delivered || []).map(d =>
+          d._id === deliveryId
+            ? { ...d, status: "returned", paymentMethod: "return" }
+            : d
+        ),
+        loading: false,
+      }));
 
-            toast.success("Delivery marked as returned");
-        } catch (error) {
-            set({ loading: false });
-            console.log("Mark as Returned Error:", error);
-            toast.error(error.response?.data?.message || "Failed to update delivery");
-        }
-    },
+      toast.success("Delivery marked as returned");
+    } catch (error) {
+      set({ loading: false });
+      console.log("Mark as Returned Error:", error);
+      toast.error(error.response?.data?.message || "Failed to update delivery");
+    }
+  },
 
-    // -------------------------
-    // MARK AS DELIVERED
-    // -------------------------
-    markAsDelivered: async (deliveryId, paymentType) => {
-        try {
-            set({ loading: true });
+  // -------------------------
+  // MARK AS DELIVERED
+  // -------------------------
+markAsDelivered: async (deliveryId, paymentType) => {
+  try {
+    set({ loading: true });
 
-            const res = await axios.put("/delivery/delivered", {
-                deliveryId,
-                paymentMethod: paymentType,
-            });
+    // 1. API request to mark as delivered
+    await axios.put("/delivery/delivered", { deliveryId, paymentMethod: paymentType });
 
-            const delivery = get().deliveries.find(d => d._id === deliveryId);
+    // 2. Refetch the updated deliveries list from backend
+    const res = await axios.get("/delivery");
+    set({ deliveries: Array.isArray(res.data) ? res.data : [], loading: false });
 
-            if (delivery) {
-                const updatedDelivery = {
-                    ...delivery,
-                    status: "delivered",
-                    paymentMethod: paymentType,
-                };
+    toast.success("Delivery marked as delivered");
+  } catch (error) {
+    set({ loading: false });
+    console.log("Mark as Delivered Error:", error);
+    toast.error(error.response?.data?.message || "Failed to update delivery");
+  }
+},
 
-                set((state) => ({
-                    deliveries: state.deliveries.filter(d => d._id !== deliveryId),
-                    delivered: [updatedDelivery, ...state.delivered],
-                    completedCount: state.completedCount + 1,
-                    loading: false,
-                }));
-            }
 
-            toast.success("Delivery marked as delivered");
-        } catch (error) {
-            set({ loading: false });
-            console.log("Mark as Delivered Error:", error);
-            toast.error(error.response?.data?.message || "Failed to update delivery");
-        }
-    },
 
-    // -------------------------
-    // DELETE DELIVERY
-    // -------------------------
-    deleteDelivery: async (deliveryId) => {
-        try {
-            set({ loading: true });
-            console.log(deliveryId)
-            await axios.delete(`/delivery/${deliveryId}`);
+  // -------------------------
+  // DELETE DELIVERY
+  // -------------------------
+  deleteDelivery: async (deliveryId) => {
+    try {
+      set({ loading: true });
+      await axios.delete(`/delivery/${deliveryId}`);
 
-            // Remove from UI immediately
-            set((state) => ({
-                deliveries: state.deliveries.filter(d => d._id !== deliveryId),
-                loading: false,
-            }));
+      set((state) => ({
+        deliveries: (state.deliveries || []).filter(d => d._id !== deliveryId),
+        loading: false,
+      }));
 
-            toast.success("Delivery deleted");
-            return true;
-
-        } catch (error) {
-            set({ loading: false });
-            console.log("Delete Delivery Error:", error);
-            toast.error(error.response?.data?.message || "Failed to delete delivery");
-            return false;
-        }
-    },
+      toast.success("Delivery deleted");
+      return true;
+    } catch (error) {
+      set({ loading: false });
+      console.log("Delete Delivery Error:", error);
+      toast.error(error.response?.data?.message || "Failed to delete delivery");
+      return false;
+    }
+  },
 }));
