@@ -13,87 +13,81 @@ const Dashboard = () => {
     loading
   } = useDeliveryStore();
 
+  const [page, setPage] = useState("dashboard");
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [riderLocation, setRiderLocation] = useState(null);
-  const [tracking, setTracking] = useState(false);
 
   // Load deliveries
   useEffect(() => {
     fetchDeliveries();
   }, []);
 
-  // AUTO-TRACK RIDER LOCATION
-  useEffect(() => {
-    if (!tracking) return;
+  // Mark delivery as delivered
+  const markAsDelivered = (deliveryId, paymentType) => {
+    const found = deliveries.find((d) => d._id === deliveryId);
+    if (!found) return;
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        setRiderLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-      },
-      (err) => {
-        alert("GPS Error: " + err.message);
-      },
-      { enableHighAccuracy: true, maximumAge: 0 }
+    const deliveredItem = {
+      ...found,
+      deliveredAt: new Date().toISOString(),
+      paymentType,
+    };
+
+    setDeliveries(prev =>
+      prev.map(d => d._id === deliveryId ? deliveredItem : d)
     );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [tracking]);
-
-  const handleShowMyLocation = () => {
-    setTracking(true);
-    alert("Tracking started! Your location will auto-update.");
   };
 
   return (
     <div>
       <main className="p-3 md:p-6 max-w-6xl mx-auto space-y-4">
-        <DeliveryProgress
-          total={deliveries.length + completedCount}
-          completed={completedCount}
-        />
+        {page === "dashboard" && (
+          <>
+            <DeliveryProgress
+              total={deliveries.length + completedCount}
+              completed={completedCount}
+            />
 
-        <section className="space-y-2">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Map</h2>
+            <section className="space-y-2">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold">Map</h2>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) =>
+                          setRiderLocation({
+                            lat: pos.coords.latitude,
+                            lng: pos.coords.longitude,
+                          }),
+                        (err) => alert("GPS Error: " + err.message)
+                      );
+                    } else alert("GPS not available");
+                  }}
+                >
+                  My Location
+                </button>
+              </div>
 
-            <div className="flex gap-2">
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleShowMyLocation}
-              >
-                My Location
-              </button>
+              <DeliveryMap
+                deliveries={deliveries}
+                selectedDelivery={selectedDelivery}
+                riderLocation={riderLocation}
+              />
+            </section>
 
-              <button
-                className="btn btn-sm btn-secondary"
-                onClick={() => {
-                  if (!selectedDelivery) return alert("Select a delivery first!");
-                  setRiderLocation(null);
-                }}
-              >
-                Show Receiver
-              </button>
-            </div>
-          </div>
-
-          <DeliveryMap
-            deliveries={deliveries}
-            selectedDelivery={selectedDelivery}
-            riderLocation={riderLocation}
-          />
-        </section>
-
-        <section>
-          <h2 className="text-lg font-semibold mb-2">Deliveries</h2>
-          <DeliveryList
-            deliveries={deliveries}
-            onSelectDelivery={(d) => setSelectedDelivery(d)}
-            onMarkDelivered={() => {}}
-          />
-        </section>
+            <section>
+              <h2 className="text-lg font-semibold mb-2">Deliveries</h2>
+              <DeliveryList
+                deliveries={deliveries}
+                onSelectDelivery={(d) => setSelectedDelivery(d)}
+                onMarkDelivered={markAsDelivered}
+                onDeliveriesUpdate={setDeliveries}
+              />
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

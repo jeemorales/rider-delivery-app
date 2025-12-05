@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 
+// Remove default icon URLs
 delete L.Icon.Default.prototype._getIconUrl;
 
 const riderIcon = new L.Icon({
@@ -17,30 +18,32 @@ const greenIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-// AUTO-FOCUS MAP POSITION
-function AutoFocus({ position }) {
+function Recenter({ position }) {
   const map = useMap();
   useEffect(() => {
-    if (position) {
-      map.setView(position, 16, { animate: true });
-    }
+    if (position) map.setView(position, 14);
   }, [position, map]);
   return null;
 }
 
 export default function DeliveryMap({ deliveries = [], selectedDelivery = null, riderLocation = null }) {
-  const initialCenter =
-    riderLocation?.lat
-      ? [riderLocation.lat, riderLocation.lng]
-      : deliveries.length && deliveries[0].customerId.lat
-      ? [deliveries[0].customerId.lat, deliveries[0].customerId.lng]
-      : [14.5995, 120.9842];
+  const [rider, setRider] = useState({ lat: null, lng: null });
 
+  useEffect(() => {
+    if (riderLocation) setRider(riderLocation);
+  }, [riderLocation]);
+
+  // Default map center
+  const initialCenter = rider.lat && rider.lng ? [rider.lat, rider.lng] :
+    deliveries.length && deliveries[0].customerId.lat ? 
+      [deliveries[0].customerId.lat, deliveries[0].customerId.lng] : 
+      [14.5995, 120.9842];
+
+  // Polyline route
   const routeCoordinates = [
-    riderLocation?.lat ? [riderLocation.lat, riderLocation.lng] : null,
-    ...deliveries
-      .filter((d) => d.customerId.lat && d.customerId.lng)
-      .map((d) => [d.customerId.lat, d.customerId.lng]),
+    rider.lat && rider.lng ? [rider.lat, rider.lng] : null,
+    ...deliveries.filter(d => d.customerId.lat && d.customerId.lng)
+                 .map(d => [d.customerId.lat, d.customerId.lng])
   ].filter(Boolean);
 
   return (
@@ -52,47 +55,31 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
         />
 
         {/* Rider Marker */}
-        {riderLocation?.lat && (
-          <>
-            <Marker position={[riderLocation.lat, riderLocation.lng]} icon={riderIcon}>
-              <Popup>Rider Location</Popup>
-            </Marker>
-
-            {/* Auto-focus rider */}
-            <AutoFocus position={[riderLocation.lat, riderLocation.lng]} />
-          </>
-        )}
+        {rider.lat && rider.lng && <Marker position={[rider.lat, rider.lng]} icon={riderIcon}>
+          <Popup>Rider Location</Popup>
+        </Marker>}
 
         {/* Delivery Markers */}
-        {deliveries.map((d, i) =>
-          d.customerId.lat ? (
-            <Marker
-              key={i}
-              position={[d.customerId.lat, d.customerId.lng]}
-              icon={greenIcon}
-            >
+        {deliveries.map((d, idx) => (
+          d.customerId.lat && d.customerId.lng && (
+            <Marker key={idx} position={[d.customerId.lat, d.customerId.lng]} icon={greenIcon}>
               <Popup>
-                <div className="font-semibold">{d.customerId.name}</div>
-                <div className="text-xs">{d.customerId.address}</div>
-                <div className="text-xs">{d.amount ? `₱${d.amount}` : ""}</div>
+                <div>
+                  <div className="font-semibold">{d.customerId.name}</div>
+                  <div className="text-xs">{d.customerId.address}</div>
+                  <div className="text-xs">{d.amount ? `₱${d.amount}` : ""}</div>
+                </div>
               </Popup>
             </Marker>
-          ) : null
-        )}
+          )
+        ))}
 
-        {/* Auto-focus selected receiver */}
-        {selectedDelivery?.customerId.lat && (
-          <AutoFocus
-            position={[
-              selectedDelivery.customerId.lat,
-              selectedDelivery.customerId.lng,
-            ]}
-          />
-        )}
+        {/* Polyline */}
+        {routeCoordinates.length > 1 && <Polyline positions={routeCoordinates} color="blue" weight={4} />}
 
-        {/* Polyline path */}
-        {routeCoordinates.length > 1 && (
-          <Polyline positions={routeCoordinates} color="blue" weight={4} />
+        {/* Recenter on selected delivery */}
+        {selectedDelivery && selectedDelivery.customerId.lat && selectedDelivery.customerId.lng && (
+          <Recenter position={[selectedDelivery.customerId.lat, selectedDelivery.customerId.lng]} />
         )}
       </MapContainer>
     </div>
