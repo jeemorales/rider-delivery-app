@@ -18,51 +18,81 @@ const greenIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-function Recenter({ position }) {
+// Component to handle map movement
+function MapController({ rider, selectedDelivery }) {
   const map = useMap();
+
+  // Auto-follow rider location
   useEffect(() => {
-    if (position) map.setView(position, 14);
-  }, [position, map]);
+    if (rider.lat && rider.lng) {
+      map.setView([rider.lat, rider.lng], 15);
+    }
+  }, [rider]);
+
+  // Focus on selected delivery marker
+  useEffect(() => {
+    if (selectedDelivery?.customerId.lat) {
+      map.setView(
+        [selectedDelivery.customerId.lat, selectedDelivery.customerId.lng],
+        16
+      );
+    }
+  }, [selectedDelivery]);
+
   return null;
 }
 
-export default function DeliveryMap({ deliveries = [], selectedDelivery = null, riderLocation = null }) {
+export default function DeliveryMap({
+  deliveries = [],
+  selectedDelivery = null,
+  riderLocation = null,
+}) {
   const [rider, setRider] = useState({ lat: null, lng: null });
 
   useEffect(() => {
     if (riderLocation) setRider(riderLocation);
   }, [riderLocation]);
 
-  // Default map center
-  const initialCenter = rider.lat && rider.lng ? [rider.lat, rider.lng] :
-    deliveries.length && deliveries[0].customerId.lat ? 
-      [deliveries[0].customerId.lat, deliveries[0].customerId.lng] : 
-      [14.5995, 120.9842];
+  // Default center
+  const initialCenter = rider.lat
+    ? [rider.lat, rider.lng]
+    : deliveries.length
+    ? [deliveries[0].customerId.lat, deliveries[0].customerId.lng]
+    : [14.5995, 120.9842];
 
-  // Polyline route
+  // Route path (optional)
   const routeCoordinates = [
     rider.lat && rider.lng ? [rider.lat, rider.lng] : null,
-    ...deliveries.filter(d => d.customerId.lat && d.customerId.lng)
-                 .map(d => [d.customerId.lat, d.customerId.lng])
+    ...deliveries
+      .filter((d) => d.customerId.lat)
+      .map((d) => [d.customerId.lat, d.customerId.lng]),
   ].filter(Boolean);
 
   return (
     <div className="rounded-lg overflow-hidden shadow-md h-[60vh]">
       <MapContainer center={initialCenter} zoom={13} className="w-full h-full">
-        <TileLayer 
+        <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
+          attribution="&copy; OpenStreetMap contributors"
         />
 
+        <MapController rider={rider} selectedDelivery={selectedDelivery} />
+
         {/* Rider Marker */}
-        {rider.lat && rider.lng && <Marker position={[rider.lat, rider.lng]} icon={riderIcon}>
-          <Popup>Rider Location</Popup>
-        </Marker>}
+        {rider.lat && rider.lng && (
+          <Marker position={[rider.lat, rider.lng]} icon={riderIcon}>
+            <Popup>Rider Location</Popup>
+          </Marker>
+        )}
 
         {/* Delivery Markers */}
-        {deliveries.map((d, idx) => (
-          d.customerId.lat && d.customerId.lng && (
-            <Marker key={idx} position={[d.customerId.lat, d.customerId.lng]} icon={greenIcon}>
+        {deliveries.map((d, idx) =>
+          d.customerId.lat ? (
+            <Marker
+              key={idx}
+              position={[d.customerId.lat, d.customerId.lng]}
+              icon={greenIcon}
+            >
               <Popup>
                 <div>
                   <div className="font-semibold">{d.customerId.name}</div>
@@ -71,15 +101,11 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
                 </div>
               </Popup>
             </Marker>
-          )
-        ))}
+          ) : null
+        )}
 
-        {/* Polyline */}
-        {routeCoordinates.length > 1 && <Polyline positions={routeCoordinates} color="blue" weight={4} />}
-
-        {/* Recenter on selected delivery */}
-        {selectedDelivery && selectedDelivery.customerId.lat && selectedDelivery.customerId.lng && (
-          <Recenter position={[selectedDelivery.customerId.lat, selectedDelivery.customerId.lng]} />
+        {routeCoordinates.length > 1 && (
+          <Polyline positions={routeCoordinates} color="blue" weight={4} />
         )}
       </MapContainer>
     </div>
