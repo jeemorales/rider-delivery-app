@@ -9,9 +9,11 @@ import { useCustomerStore } from "../stores/useCustomerStore";
 // Fix Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconRetinaUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
   iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  shadowUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
 // Click map to pick location
@@ -24,6 +26,17 @@ function MapClickPicker({ onPick }) {
   return null;
 }
 
+// Auto-focus map on rider location
+function MapController({ riderLocation }) {
+  const map = useMapEvents({});
+  useEffect(() => {
+    if (riderLocation?.lat && riderLocation?.lng) {
+      map.setView([riderLocation.lat, riderLocation.lng], 16, { animate: true });
+    }
+  }, [riderLocation, map]);
+  return null;
+}
+
 // List of barangay suggestions
 const barangayOptions = [
   "Liwayway",
@@ -33,7 +46,7 @@ const barangayOptions = [
   "Patalac",
   "Bangad",
   "Mapalad",
-  "Malacañang"
+  "Malacañang",
 ];
 
 export default function CustomersPage() {
@@ -52,6 +65,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [mapPick, setMapPick] = useState(null);
+  const [riderLocation, setRiderLocation] = useState(null); // For live GPS
   const [query, setQuery] = useState("");
   const [deliverForId, setDeliverForId] = useState(null);
   const [deliveryPaymentType, setDeliveryPaymentType] = useState("");
@@ -69,7 +83,7 @@ export default function CustomersPage() {
     fetchCustomers();
   }, []);
 
-  // Whenever user picks on map
+  // Update form when map is clicked
   useEffect(() => {
     if (mapPick) {
       setForm((f) => ({
@@ -77,14 +91,13 @@ export default function CustomersPage() {
         lat: mapPick.lat.toFixed(6),
         lng: mapPick.lng.toFixed(6),
       }));
-
       if (mapRef.current) {
         mapRef.current.setView([mapPick.lat, mapPick.lng], 16);
       }
     }
   }, [mapPick]);
 
-  // Use device GPS
+  // Function to get device GPS and update rider location
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) return toast.error("Geolocation not supported");
 
@@ -93,22 +106,44 @@ export default function CustomersPage() {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
+        // Update rider location (map will auto-focus via MapController)
+        setRiderLocation({ lat, lng });
+
+        // Also update form fields
         setForm((f) => ({
           ...f,
           lat: lat.toFixed(6),
           lng: lng.toFixed(6),
         }));
 
-        if (mapRef.current) {
-          mapRef.current.setView([lat, lng], 16);
-        }
-
+        // Update mapPick for marker placement
         setMapPick({ lat, lng });
+
+        toast.success("Location detected successfully!");
       },
       (err) => toast.error("GPS Error: " + err.message),
       { enableHighAccuracy: true }
     );
   };
+
+  // Optional: Live GPS tracking every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setRiderLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true }
+      );
+    }, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Submit Form
   const handleSubmit = async (e) => {
@@ -182,7 +217,6 @@ export default function CustomersPage() {
   const confirmDelivery = async (cust) => {
     if (!deliveryPaymentType) return toast.error("Select payment status");
 
-    // Only require amount if unpaid
     let amount = 0;
     if (deliveryPaymentType === "unpaid") {
       if (!deliveryAmount || isNaN(deliveryAmount) || Number(deliveryAmount) <= 0) {
@@ -264,13 +298,13 @@ export default function CustomersPage() {
               value={form.lng}
               disabled
             />
-            <a
+            <button
               type="button"
               className="btn btn-primary"
               onClick={handleUseMyLocation}
             >
               Use My Location
-            </a>
+            </button>
           </div>
 
           <textarea
@@ -294,7 +328,7 @@ export default function CustomersPage() {
               : "Save"}
           </button>
 
-          <a
+          <button
             type="button"
             className="btn btn-ghost w-full"
             onClick={() => {
@@ -305,7 +339,7 @@ export default function CustomersPage() {
             }}
           >
             Clear
-          </a>
+          </button>
         </form>
       </div>
 
@@ -325,6 +359,9 @@ export default function CustomersPage() {
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <MapClickPicker onPick={setMapPick} />
+
+          {/* Auto-follow rider */}
+          <MapController riderLocation={riderLocation || mapPick} />
 
           {form.lat && form.lng && (
             <Marker position={[Number(form.lat), Number(form.lng)]}>
@@ -357,16 +394,16 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <a className="btn btn-sm" onClick={() => startEdit(c)}>
+                  <button className="btn btn-sm" onClick={() => startEdit(c)}>
                     <Pencil size={16} /> Edit
-                  </a>
+                  </button>
 
-                  <a
+                  <button
                     className="btn btn-sm btn-success text-white"
                     onClick={() => setDeliverForId(c._id)}
                   >
                     <PackagePlus size={16} /> Deliver
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -381,7 +418,7 @@ export default function CustomersPage() {
                       checked={deliveryPaymentType === "paid"}
                       onChange={() => {
                         setDeliveryPaymentType("paid");
-                        setDeliveryAmount(""); // reset amount
+                        setDeliveryAmount("");
                       }}
                     />
                     Paid
@@ -408,9 +445,9 @@ export default function CustomersPage() {
                   )}
 
                   <div className="flex justify-end gap-2 mt-3">
-                    <a className="btn btn-sm" onClick={() => setDeliverForId(null)}>
+                    <button className="btn btn-sm" onClick={() => setDeliverForId(null)}>
                       Cancel
-                    </a>
+                    </button>
                     <button
                       className="btn btn-sm btn-primary"
                       onClick={() => confirmDelivery(c)}
