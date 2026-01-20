@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/useUserStore";
+import {
+  Home,
+  Users,
+  Truck,
+  LogOut,
+} from "lucide-react";
 
 const Navbar = () => {
   const { user, logout } = useUserStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Close mobile menu on window resize
+  // Close mobile menu on resize
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
@@ -28,83 +35,31 @@ const Navbar = () => {
     setMobileMenuOpen(false);
   };
 
+  const isActive = (path) => location.pathname === path;
+
   return (
-    <header className="sticky top-0 z-50 bg-base-100 shadow-md border-b backdrop-blur-md">
-      <div className="max-w-6xl mx-auto px-4 md:px-6">
-        <div className="navbar py-2 relative">
+    <>
+      {/* ================= TOP NAVBAR (DESKTOP) ================= */}
+      <header className="sticky top-0 z-50 bg-base-100/80 backdrop-blur-md shadow-sm border-b hidden md:block">
+        <div className="max-w-6xl mx-auto px-4 md:px-6">
+          <div className="navbar py-2">
 
-          {/* Logo */}
-          <div className="flex-1">
-            <span className="text-xl font-bold tracking-wide text-primary">
-              Rider Delivery App
-            </span>
-          </div>
+            {/* Logo */}
+            <div className="flex-1">
+              <span className="text-xl font-bold tracking-wide text-primary">
+                Rider Delivery App
+              </span>
+            </div>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex gap-4 font-medium">
-            {user ? (
-              <>
-                <Link className="btn btn-ghost btn-sm" to="/">Dashboard</Link>
-                <Link className="btn btn-ghost btn-sm" to="/customers">Customers</Link>
-                <Link className="btn btn-ghost btn-sm" to="/delivery">Delivery</Link>
-                <button className="btn btn-ghost btn-sm text-error" onClick={handleLogout}>
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link className="btn btn-ghost btn-sm text-secondary" to="/login">Login</Link>
-                <Link className="btn btn-ghost btn-sm text-primary" to="/signup">Signup</Link>
-              </>
-            )}
-          </div>
-
-          {/* Mobile Menu */}
-          <div className="md:hidden relative">
-            {/* Burger Icon */}
-            <button
-              className="btn btn-square btn-ghost"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                  d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-
-            {/* Animated Dropdown Menu */}
-            <div
-              className={`absolute top-full right-0 w-52 bg-base-100 border rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out origin-top-left
-                ${mobileMenuOpen ? "opacity-100 scale-y-100" : "opacity-0 scale-y-0 pointer-events-none"}`}
-            >
+            {/* Desktop Menu */}
+            <div className="flex gap-4 font-medium">
               {user ? (
                 <>
+                  <Link className="btn btn-ghost btn-sm" to="/">Dashboard</Link>
+                  <Link className="btn btn-ghost btn-sm" to="/customers">Customers</Link>
+                  <Link className="btn btn-ghost btn-sm" to="/delivery">Delivery</Link>
                   <button
-                    className="block w-full text-left px-4 py-1 hover:bg-base-200 rounded-t-lg"
-                    onClick={() => handleNavigate("/")}
-                  >
-                    Dashboard
-                  </button>
-                  <button
-                    className="block w-full text-left px-4 py-1 hover:bg-base-200"
-                    onClick={() => handleNavigate("/customers")}
-                  >
-                    Customers
-                  </button>
-                  <button
-                    className="block w-full text-left px-4 py-1 hover:bg-base-200"
-                    onClick={() => handleNavigate("/delivery")}
-                  >
-                    Delivery
-                  </button>
-                  <button
-                    className="block w-full text-left px-4 py-1 text-error hover:bg-base-200 rounded-b-lg"
+                    className="btn btn-ghost btn-sm text-error"
                     onClick={handleLogout}
                   >
                     Logout
@@ -112,26 +67,96 @@ const Navbar = () => {
                 </>
               ) : (
                 <>
-                  <button
-                    className="block w-full text-left px-4 py-3 hover:bg-base-200 rounded-t-lg"
-                    onClick={() => handleNavigate("/login")}
-                  >
-                    Login
-                  </button>
-                  <button
-                    className="block w-full text-left px-4 py-3 hover:bg-base-200 rounded-b-lg"
-                    onClick={() => handleNavigate("/signup")}
-                  >
-                    Signup
-                  </button>
+                  <Link className="btn btn-ghost btn-sm" to="/login">Login</Link>
+                  <Link className="btn btn-ghost btn-sm" to="/signup">Signup</Link>
                 </>
               )}
             </div>
           </div>
-
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* ================= MOBILE TOP BAR ================= */}
+      <header className="md:hidden sticky top-0 z-40 bg-base-100/80 backdrop-blur-md border-b">
+        <div className="px-4 py-2 flex justify-between items-center">
+          <span className="font-semibold text-primary">
+            Rider Delivery App
+          </span>
+
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            ☰
+          </button>
+        </div>
+      </header>
+
+      {/* ================= MOBILE DROPDOWN MENU ================= */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/20" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute top-14 right-4 w-48 bg-base-100 rounded-lg shadow-lg p-2">
+            <button className="w-full text-left px-3 py-2" onClick={() => handleNavigate("/")}>
+              Dashboard
+            </button>
+            <button className="w-full text-left px-3 py-2" onClick={() => handleNavigate("/customers")}>
+              Customers
+            </button>
+            <button className="w-full text-left px-3 py-2" onClick={() => handleNavigate("/delivery")}>
+              Delivery
+            </button>
+            <button className="w-full text-left px-3 py-2 text-error" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MOBILE BOTTOM NAV ================= */}
+      {user && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-base-100/80 backdrop-blur-md border-t">
+          <div className="flex justify-around items-center h-14">
+            <button
+              onClick={() => navigate("/")}
+              className={`flex flex-col items-center text-xs ${
+                isActive("/") ? "text-primary" : "text-base-content/60"
+              }`}
+            >
+              <Home size={20} />
+              Home
+            </button>
+
+            <button
+              onClick={() => navigate("/customers")}
+              className={`flex flex-col items-center text-xs ${
+                isActive("/customers") ? "text-primary" : "text-base-content/60"
+              }`}
+            >
+              <Users size={20} />
+              Customers
+            </button>
+
+            <button
+              onClick={() => navigate("/delivery")}
+              className={`flex flex-col items-center text-xs ${
+                isActive("/delivery") ? "text-primary" : "text-base-content/60"
+              }`}
+            >
+              <Truck size={20} />
+              Delivery
+            </button>
+
+            {/* <button
+              onClick={handleLogout}
+              className="flex flex-col items-center text-xs text-error"
+            >
+              <LogOut size={20} />
+              Logout
+            </button> */}
+          </div>
+        </nav>
+      )}
+    </>
   );
 };
 

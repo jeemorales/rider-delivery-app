@@ -81,11 +81,13 @@ const Dashboard = () => {
           </button>
         </div>
 
-        <DeliveryMap
-          deliveries={deliveries}
-          selectedDelivery={selectedDelivery}
-          riderLocation={riderLocation}
-        />
+        <div className="relative z-0">
+          <DeliveryMap
+            deliveries={deliveries}
+            selectedDelivery={selectedDelivery}
+            riderLocation={riderLocation}
+          />
+        </div>
       </section>
 
       <section>

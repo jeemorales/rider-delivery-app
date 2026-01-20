@@ -1,5 +1,6 @@
 // src/pages/CustomersPage.jsx
 import React, { useEffect, useRef, useState } from "react";
+import { MapPin, MapPinOff, Phone, PhoneOff } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import toast, { Toaster } from "react-hot-toast";
@@ -47,6 +48,9 @@ const barangayOptions = [
   "Bangad",
   "Mapalad",
   "Malacañang",
+  "Kalikid sur",
+  "Kalikid norte",
+  "Bakod bayan",
 ];
 
 export default function CustomersPage() {
@@ -62,13 +66,13 @@ export default function CustomersPage() {
     remarks: "",
   };
 
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState({ ...emptyForm });
   const [editingId, setEditingId] = useState(null);
   const [mapPick, setMapPick] = useState(null);
   const [riderLocation, setRiderLocation] = useState(null); // For live GPS
   const [query, setQuery] = useState("");
   const [deliverForId, setDeliverForId] = useState(null);
-  const [deliveryPaymentType, setDeliveryPaymentType] = useState("");
+  const [deliveryPaymentType, setDeliveryPaymentType] = useState("paid");
   const [deliveryAmount, setDeliveryAmount] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -148,6 +152,15 @@ export default function CustomersPage() {
   // Submit Form
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const actionLabel = editingId ? "update this customer" : "add this customer";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${actionLabel}?`
+    );
+
+    if (!confirmed) return;
+
     setSaving(true);
 
     const payload = {
@@ -169,16 +182,17 @@ export default function CustomersPage() {
     setSaving(false);
   };
 
+
   // Pre-fill edit fields
   const startEdit = (c) => {
     setEditingId(c._id);
     setForm({
-      name: c.name,
-      address: c.address,
-      phone: c.phone,
-      lat: c.lat,
-      lng: c.lng,
-      remarks: c.remarks || "",
+      name: String(c.name ?? ""),
+      address: String(c.address ?? ""),
+      phone: String(c.phone ?? ""),
+      lat: c.lat != null ? String(c.lat) : "",
+      lng: c.lng != null ? String(c.lng) : "",
+      remarks: String(c.remarks ?? ""),
     });
 
     if (c.lat && c.lng && mapRef.current) {
@@ -215,11 +229,29 @@ export default function CustomersPage() {
 
   // Confirm delivery
   const confirmDelivery = async (cust) => {
-    if (!deliveryPaymentType) return toast.error("Select payment status");
+    if (!deliveryPaymentType) {
+      return toast.error("Select payment status");
+    }
+
+    const actionLabel =
+      deliveryPaymentType === "paid"
+        ? "mark this delivery as PAID"
+        : "create a Cash on delivery";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${actionLabel}?`
+    );
+
+    if (!confirmed) return;
 
     let amount = 0;
+
     if (deliveryPaymentType === "unpaid") {
-      if (!deliveryAmount || isNaN(deliveryAmount) || Number(deliveryAmount) <= 0) {
+      if (
+        !deliveryAmount ||
+        isNaN(deliveryAmount) ||
+        Number(deliveryAmount) <= 0
+      ) {
         return toast.error("Please input a valid amount for unpaid delivery");
       }
       amount = Number(deliveryAmount);
@@ -235,6 +267,7 @@ export default function CustomersPage() {
     setDeliveryAmount("");
     setDeliverForId(null);
   };
+
 
   return (
     <div className="space-y-6">
@@ -300,22 +333,22 @@ export default function CustomersPage() {
             />
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary text-white"
               onClick={handleUseMyLocation}
             >
               Use My Location
             </button>
           </div>
 
-          <textarea
-            className="textarea textarea-bordered w-full"
+          <input
+            className="input input-bordered w-full"
             placeholder="Remarks"
             value={form.remarks}
             onChange={(e) => setForm({ ...form, remarks: e.target.value })}
           />
 
           <button
-            className="btn btn-primary w-full"
+            className="btn btn-primary text-white w-full"
             type="submit"
             disabled={saving}
           >
@@ -346,29 +379,30 @@ export default function CustomersPage() {
       {/* MAP PICKER */}
       <div className="card bg-base-200 p-4 shadow-md">
         <h3 className="font-semibold mb-2">Map Picker</h3>
+        <div className="relative z-0">
+          <MapContainer
+            center={
+              form.lat && form.lng
+                ? [Number(form.lat), Number(form.lng)]
+                : [14.5995, 120.9842]
+            }
+            zoom={13}
+            className="w-full h-64 rounded"
+            whenCreated={(map) => (mapRef.current = map)}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <MapClickPicker onPick={setMapPick} />
 
-        <MapContainer
-          center={
-            form.lat && form.lng
-              ? [Number(form.lat), Number(form.lng)]
-              : [14.5995, 120.9842]
-          }
-          zoom={13}
-          className="w-full h-64 rounded"
-          whenCreated={(map) => (mapRef.current = map)}
-        >
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <MapClickPicker onPick={setMapPick} />
+            {/* Auto-follow rider */}
+            <MapController riderLocation={riderLocation || mapPick} />
 
-          {/* Auto-follow rider */}
-          <MapController riderLocation={riderLocation || mapPick} />
-
-          {form.lat && form.lng && (
-            <Marker position={[Number(form.lat), Number(form.lng)]}>
-              <Popup>Selected Location</Popup>
-            </Marker>
-          )}
-        </MapContainer>
+            {form.lat && form.lng && (
+              <Marker position={[Number(form.lat), Number(form.lng)]}>
+                <Popup>Selected Location</Popup>
+              </Marker>
+            )}
+          </MapContainer>
+        </div>
       </div>
 
       {/* CUSTOMER LIST */}
@@ -386,11 +420,54 @@ export default function CustomersPage() {
           {filtered.map((c) => (
             <div key={c._id} className="card bg-base-100 p-3 border">
               <div className="flex justify-between">
+      
                 <div>
-                  <div className="font-semibold ">{c.name}</div>
-                  <div className="text-xs text-muted">{c.address}</div>
-                  <div className="text-xs">{c.phone || "09**********"}</div>
-                  <div className="text-xs mt-1">{c.remarks}</div>
+                  {/* NAME + LOCATION STATUS */}
+                  <div className="font-semibold flex items-center gap-2">
+                    {c.name}
+
+                    {Number(c.lat) === 15.484995 && Number(c.lng) === 121.086929 ? (
+                      <MapPinOff
+                        size={14}
+                        className="text-base-content/40"
+                        title="No pin location"
+                      />
+                    ) : (
+                      <MapPin
+                        size={14}
+                        className="text-success"
+                        title="Pin location available"
+                      />
+                    )}
+                  </div>
+
+                  {/* PHONE */}
+                  <div className="text-xs flex items-center gap-2 mt-1 text-base-content/70">
+                    {c.phone ? (
+                      <>
+                        <Phone size={12} />
+                        {c.phone}
+                      </>
+                    ) : (
+                      <>
+                        <PhoneOff size={12} />
+                        <span className="italic">No phone number</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* ADDRESS */}
+                  <div className="text-xs flex items-center gap-2 text-base-content/60">
+                    <MapPin size={12} />
+                    {c.address || "No address"}
+                  </div>
+
+                  {/* REMARKS (ONLY SHOW IF EXISTS) */}
+                  {c.remarks && (
+                    <div className="text-xs mt-1 italic text-base-content/50">
+                      {c.remarks}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -399,7 +476,7 @@ export default function CustomersPage() {
                   </button>
 
                   <button
-                    className="btn btn-sm btn-success text-white"
+                    className="btn btn-sm btn-primary text-white"
                     onClick={() => setDeliverForId(c._id)}
                   >
                     <PackagePlus size={16} /> Deliver
@@ -409,31 +486,37 @@ export default function CustomersPage() {
 
               {deliverForId === c._id && (
                 <div className="mt-3 p-3 bg-base-200 rounded">
-                  <label className="label-text font-medium">Payment Status</label>
+                  <div className="font-medium mb-2">Payment Status</div>
 
-                  <label className="flex items-center gap-2 mt-2">
-                    <input
-                      type="radio"
-                      className="radio radio-success"
-                      checked={deliveryPaymentType === "paid"}
-                      onChange={() => {
+                  {/* SEGMENTED BUTTONS */}
+                  <div className="join w-full">
+                    <button
+                      className={`btn btn-sm join-item flex-1 border-base-400 ${
+                        deliveryPaymentType === "paid"
+                          ? "btn-success text-white"
+                          : "btn-outline"
+                      }`}
+                      onClick={() => {
                         setDeliveryPaymentType("paid");
                         setDeliveryAmount("");
                       }}
-                    />
-                    Paid
-                  </label>
+                    >
+                      Paid
+                    </button>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      className="radio radio-warning"
-                      checked={deliveryPaymentType === "unpaid"}
-                      onChange={() => setDeliveryPaymentType("unpaid")}
-                    />
-                    Unpaid
-                  </label>
+                    <button
+                      className={`btn btn-sm join-item flex-1 border-base-400 ${
+                        deliveryPaymentType === "unpaid"
+                          ? "btn-primary text-white"
+                          : "btn-outline"
+                      }`}
+                      onClick={() => setDeliveryPaymentType("unpaid")}
+                    >
+                      Cash on Delivery
+                    </button>
+                  </div>
 
+                  {/* AMOUNT INPUT */}
                   {deliveryPaymentType === "unpaid" && (
                     <input
                       type="number"
@@ -444,18 +527,25 @@ export default function CustomersPage() {
                     />
                   )}
 
+                  {/* ACTION BUTTONS */}
                   <div className="flex justify-end gap-2 mt-3">
-                    <button className="btn btn-sm" onClick={() => setDeliverForId(null)}>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => setDeliverForId(null)}
+                    >
                       Cancel
                     </button>
+
                     <button
                       className="btn btn-sm btn-primary"
                       onClick={() => confirmDelivery(c)}
+                      disabled={!deliveryPaymentType}
                     >
                       Submit
                     </button>
                   </div>
                 </div>
+
               )}
             </div>
           ))}

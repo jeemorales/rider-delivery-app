@@ -117,46 +117,62 @@ export default function DeliveredPage() {
       </div>
 
       {/* Delivered Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredDelivered.map((d) => (
-          <div key={d._id} className="card bg-base-100 shadow-md hover:shadow-lg border border-base-200 rounded-lg">
-            <div className="card-body p-4">
+          <div
+            key={d._id}
+            className="card bg-base-100 border border-base-200 shadow-md rounded-lg"
+          >
+            <div className="p-3">
 
               {/* Name & Amount */}
               <div className="flex justify-between items-center">
-                <div className="font-medium text-base">{d.customerId?.name}</div>
-                <div className="mt-3">
-                    {d.amount > 0 ? (
-                        <div className="font-semibold text-base">₱{d.amount}.00</div>
-                    ) : (
-                        <div className="text-green-500 font-semibold flex items-center gap-1">
-                        <CheckCircle size={18} /> Paid
-                        </div>
-                    )}
+                <div className="font-medium text-sm truncate">
+                  {d.customerId?.name}
                 </div>
+
+                {d.amount > 0 ? (
+                  <div className="text-sm font-semibold">
+                    ₱{d.amount}.00
+                  </div>
+                ) : (
+                  <div className="text-success text-xs font-medium flex items-center gap-1">
+                    <CheckCircle size={14} />
+                    Paid
+                  </div>
+                )}
               </div>
 
               {/* Date */}
-              <div className="text-xs opacity-70 mt-1">
+              <div className="text-[11px] text-base-content/60 mt-0.5">
                 {formatDate(d.createdAt)}
               </div>
 
-              {/* Status & Payment Badges */}
-              <div className="flex justify-between mt-2 items-center gap-2 text-sm flex-wrap">
+              {/* Status & Payment (Compact Pills) */}
+              <div className="flex justify-between items-center gap-2 text-[11px] mt-1">
                 <span
-                  className={`badge badge-outline ${d.status === "returned" ? "badge-error" : "badge-success"}`}
+                  className={`px-2 py-0.5 rounded-full border ${
+                    d.status === "returned"
+                      ? "border-error text-error"
+                      : "border-success text-success"
+                  }`}
                 >
                   {d.status === "returned" ? "Returned" : "Delivered"}
                 </span>
 
                 {(d.paymentMethod === "cash" || d.paymentMethod === "gcash") && (
                   <span
-                    className={`badge badge-secondary text-white ${d.paymentMethod === "cash" ? "badge-success" : "badge-info"}`}
+                    className={`px-2 py-0.5 rounded-full ${
+                      d.paymentMethod === "cash"
+                        ? "bg-success text-white"
+                        : "bg-info text-white"
+                    }`}
                   >
                     {d.paymentMethod === "cash" ? "Cash" : "GCash"}
                   </span>
                 )}
               </div>
+
             </div>
           </div>
         ))}
