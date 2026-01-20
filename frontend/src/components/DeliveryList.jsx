@@ -196,20 +196,16 @@ export default function DeliveryList({
                       tabIndex={0}
                       className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40 z-[1]"
                     >
-                      {customer?.phone && (
+                      {Number(customer.phone) > 0 && (
                         <li>
                           <a
-                            href={`tel:${customer.phone.startsWith("+") 
-                              ? customer.phone 
-                              : `+63${customer.phone.replace(/^0/, "")}`}`}
+                            href={`+63${customer.phone}`}
                             className="flex items-center gap-2 text-success"
                           >
-                            <Phone size={16} />
-                            Call
+                            <Phone size={16} /> Call
                           </a>
                         </li>
                       )}
-
                       <li>
                         <button
                           className="text-error flex items-center gap-2"
