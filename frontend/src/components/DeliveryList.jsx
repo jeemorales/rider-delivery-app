@@ -82,6 +82,43 @@ export default function DeliveryList({
   //   setShowPayment(false);
   // };
 
+  const callNumber = (phone = "") => {
+    // remove all non-digits
+    let digits = phone.replace(/\D/g, "");
+
+    /**
+     * POSSIBLE INPUTS:
+     * 905369331
+     * 09053693311
+     * 9053693311
+     * +639053693311
+     */
+
+    // If DB saved only last 9 digits → prepend +639
+    if (digits.length === 9) {
+      digits = `63${digits}`;
+    }
+
+    // If starts with 0 (09XXXXXXXXX)
+    if (digits.length === 11 && digits.startsWith("0")) {
+      digits = `63${digits.slice(1)}`;
+    }
+
+    // If already PH number without +
+    if (digits.startsWith("63") && digits.length === 12) {
+      digits = `+${digits}`;
+    }
+
+    // Final safety check
+    if (!digits.startsWith("+")) {
+      digits = `+${digits}`;
+    }
+
+    // iOS requires direct navigation
+    window.location.href = `tel:${digits}`;
+  };
+
+
   const handleReturn = () => {
     if (!selected) return;
 
@@ -196,16 +233,22 @@ export default function DeliveryList({
                       tabIndex={0}
                       className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40 z-[1]"
                     >
-                      {Number(customer.phone) > 0 && (
+                      {customer?.phone && (
                         <li>
-                          <a
-                            href={`+63${customer.phone}`}
+                          <button
+                            type="button"
                             className="flex items-center gap-2 text-success"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              callNumber(customer.phone);
+                            }}
                           >
-                            <Phone size={16} /> Call
-                          </a>
+                            <Phone size={16} />
+                            Call
+                          </button>
                         </li>
                       )}
+
                       <li>
                         <button
                           className="text-error flex items-center gap-2"
