@@ -38,17 +38,65 @@ export const addDelivery = async (req, res) => {
 };
 
 //GET RIDER ACTIVE DELIVERIES (OUT-FOR-DELIVERY)
+// export const getRiderDeliveries = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const deliveries = await Delivery.find(
+//       { userId, 
+//         status: "out-for-delivery", 
+//       }).populate("customerId");
+//     res.json(deliveries);
+//   } catch (error) {
+//       console.log("Error in getRiderDeliveries controller:", error.message);
+//       res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const getRiderDeliveries = async (req, res) => {
   try {
     const userId = req.user.id;
-    const deliveries = await Delivery.find(
-      { userId, 
-        status: "out-for-delivery", 
-      }).populate("customerId");
-    res.json(deliveries);
+
+    const deliveries = await Delivery.find({
+      userId,
+      status: "out-for-delivery",
+    }).populate("customerId");
+
+    // Custom address order
+    const addressPriority = [
+      "Barrio Militar",
+      "Liwayway",
+      "Mapalad",
+      "Malacañang",
+      "Patalac",
+      "Kalikid sur",
+      "Kalikid norte",
+      "Camptinio",
+      "Bangad",
+      "Bakod bayan",
+      "Cabanatuan",
+    ];
+
+    // Sorting logic
+    const sortedDeliveries = deliveries.sort((a, b) => {
+      const addressA = a.customerId?.address || "";
+      const addressB = b.customerId?.address || "";
+
+      const indexA = addressPriority.indexOf(addressA);
+      const indexB = addressPriority.indexOf(addressB);
+
+      // If address is in the list, use its index
+      // If not in list, push to bottom
+      const priorityA = indexA === -1 ? Infinity : indexA;
+      const priorityB = indexB === -1 ? Infinity : indexB;
+
+      return priorityA - priorityB;
+    });
+
+    res.json(sortedDeliveries);
+
   } catch (error) {
-      console.log("Error in getRiderDeliveries controller:", error.message);
-      res.status(500).json({ message: "Server error", error: error.message });
+    console.log("Error in getRiderDeliveries controller:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 

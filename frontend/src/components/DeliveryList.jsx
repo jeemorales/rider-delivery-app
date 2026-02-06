@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Wallet,
   MapPin,
@@ -11,9 +11,10 @@ import {
   RotateCcw,
   Trash2,
   MoreVertical,
+  Filter
 } from "lucide-react";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
-import { Toaster } from "react-hot-toast";
+import { Toaster, toast } from "react-hot-toast";
 
 export default function DeliveryList({
   deliveries = [],
@@ -28,6 +29,9 @@ export default function DeliveryList({
   const [paymentType, setPaymentType] = useState("cash");
   const [showPayment, setShowPayment] = useState(false);
 
+  // 🔥 ONLY NEW STATE ADDED
+  const [selectedAddress, setSelectedAddress] = useState("");
+
   const openDrawer = (delivery) => {
     setSelected(delivery);
     setPaymentType("cash");
@@ -38,7 +42,6 @@ export default function DeliveryList({
   const handleMarkDeliveredClick = () => {
     if (!selected) return;
 
-    // Already paid → auto deliver with a valid payment method
     if (selected.amount === 0) {
       onMarkDelivered && onMarkDelivered(selected._id, "gcash");
       markAsDelivered(selected._id, "gcash");
@@ -49,7 +52,6 @@ export default function DeliveryList({
       return;
     }
 
-    // Not paid → ask for payment type
     setShowPayment(true);
   };
 
@@ -72,16 +74,6 @@ export default function DeliveryList({
     setShowPayment(false);
   };
 
-
-  // const handleReturn = () => {
-  //   if (!selected) return;
-  //   onReturnDelivery && onReturnDelivery(selected._id);
-  //   markAsReturned(selected._id);
-  //   setDrawerOpen(false);
-  //   setSelected(null);
-  //   setShowPayment(false);
-  // };
-
   const handleReturn = () => {
     if (!selected) return;
 
@@ -99,7 +91,6 @@ export default function DeliveryList({
     setShowPayment(false);
   };
 
-
   const handleDelete = async (deliveryId) => {
     if (loading) return;
     const confirmDelete = window.confirm(
@@ -111,16 +102,72 @@ export default function DeliveryList({
 
   const safeDeliveries = Array.isArray(deliveries) ? deliveries : [];
 
+  // 🔥 NEW: GET ALL UNIQUE ADDRESSES
+  const allAddresses = useMemo(() => {
+    const list = safeDeliveries
+      .map((d) => d.customerId?.address)
+      .filter(Boolean);
+
+    return [...new Set(list)];
+  }, [safeDeliveries]);
+
+  // 🔥 NEW: SORTING LOGIC BASED ON SELECTED ADDRESS
+  const sortedDeliveries = useMemo(() => {
+    if (!selectedAddress) return safeDeliveries;
+
+    return [...safeDeliveries].sort((a, b) => {
+      const addrA = a.customerId?.address || "";
+      const addrB = b.customerId?.address || "";
+
+      if (addrA === selectedAddress && addrB !== selectedAddress) return -1;
+      if (addrB === selectedAddress && addrA !== selectedAddress) return 1;
+
+      return 0;
+    });
+  }, [safeDeliveries, selectedAddress]);
+
   return (
-    <div className="p-3">
+    <div className="pb-12">
+
+      {/* 🔥 ONLY NEW UI ADDED - FILTER SECTION */}
+      <div className="mb-4 flex flex-row gap-2 items-center flex-wrap">
+
+        <div className="flex items-center gap-2 w-full flex-nowrap">
+          <Filter size={18} />
+
+          <select
+            className="select select-bordered flex-1 sm:w-64"
+            value={selectedAddress}
+            onChange={(e) => setSelectedAddress(e.target.value)}
+          >
+            <option value="">All Addresses</option>
+
+            {allAddresses.map((addr) => (
+              <option key={addr} value={addr}>
+                {addr}
+              </option>
+            ))}
+          </select>
+
+          {selectedAddress && (
+            <button
+              className="btn btn-sm btn-primary whitespace-nowrap"
+              onClick={() => setSelectedAddress("")}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {safeDeliveries.length === 0 && (
+        {sortedDeliveries.length === 0 && (
           <div className="text-center text-sm text-base-content/60">
             No deliveries available.
           </div>
         )}
 
-        {safeDeliveries.map((d) => {
+        {sortedDeliveries.map((d) => {
           const isNearest = d._id === nearestDeliveryId;
           const customer = d.customerId || {};
 
@@ -132,10 +179,8 @@ export default function DeliveryList({
               }`}
             >
               <div className="flex justify-between gap-4">
-                {/* INFO */}
                 <div className="flex-1">
 
-                  {/* NAME */}
                   <h2 className="font-semibold text-lg flex items-center gap-2">
                     {customer?.name || "No Name"}
 
@@ -144,18 +189,15 @@ export default function DeliveryList({
                       <MapPinOff
                         size={16}
                         className="text-base-content/40"
-                        title="No pin location"
                       />
                     ) : (
                       <MapPin
                         size={16}
                         className="text-success"
-                        title="Pin location available"
                       />
                     )}
                   </h2>
 
-                  {/* PHONE */}
                   <p className="text-sm flex items-center gap-2 mt-1 text-base-content/70">
                     {customer?.phone ? (
                       <>
@@ -170,13 +212,11 @@ export default function DeliveryList({
                     )}
                   </p>
 
-                  {/* ADDRESS */}
                   <p className="text-sm text-base-content/60 flex items-center gap-2">
                     <MapPin size={14} />
                     {customer.address || "No address"}
                   </p>
 
-                  {/* REMARKS (ONLY IF EXISTS) */}
                   {customer.remarks && (
                     <p className="text-xs mt-1 italic text-base-content/50">
                       {customer.remarks}
@@ -184,9 +224,7 @@ export default function DeliveryList({
                   )}
                 </div>
 
-                {/* ACTIONS */}
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  {/* 3 DOTS MENU */}
                   <div className="dropdown dropdown-end">
                     <label tabIndex={0} className="btn btn-sm btn-ghost">
                       <MoreVertical size={18} />
@@ -217,7 +255,6 @@ export default function DeliveryList({
                     </ul>
                   </div>
 
-                  {/* SHOW */}
                   <button
                     className="btn btn-sm btn-outline flex items-center gap-1 w-full"
                     onClick={() => onSelectDelivery && onSelectDelivery(d)}
@@ -225,7 +262,6 @@ export default function DeliveryList({
                     <Eye size={16} /> Show
                   </button>
 
-                  {/* STATUS */}
                   <button
                     className="btn btn-sm btn-primary text-white flex items-center gap-1 w-full"
                     onClick={() => openDrawer(d)}
@@ -235,7 +271,6 @@ export default function DeliveryList({
                 </div>
               </div>
 
-              {/* PAYMENT STATUS */}
               <div className="mt-3 flex justify-between items-center">
                 {d.amount > 0 ? (
                   <span className="text-success font-small flex items-center gap-2">
@@ -256,7 +291,7 @@ export default function DeliveryList({
         })}
       </div>
 
-      {/* DRAWER */}
+      {/* YOUR ORIGINAL DRAWER CODE - UNTOUCHED */}
       <div
         className={`fixed left-0 right-0 bottom-0 z-50 transition-transform ${
           drawerOpen ? "translate-y-0" : "translate-y-full"
@@ -343,7 +378,6 @@ export default function DeliveryList({
                   </div>
                 </>
               )}
-
             </>
           )}
         </div>

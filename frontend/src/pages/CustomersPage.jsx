@@ -40,17 +40,17 @@ function MapController({ riderLocation }) {
 
 // List of barangay suggestions
 const barangayOptions = [
-  "Liwayway",
   "Barrio Militar",
-  "Camptinio",
-  "Cabanatuan",
-  "Patalac",
-  "Bangad",
+  "Liwayway",
   "Mapalad",
   "Malacañang",
+  "Patalac",
   "Kalikid sur",
   "Kalikid norte",
+  "Camptinio",
+  "Bangad",
   "Bakod bayan",
+  "Cabanatuan",
 ];
 
 export default function CustomersPage() {
@@ -406,7 +406,7 @@ export default function CustomersPage() {
       </div>
 
       {/* CUSTOMER LIST */}
-      <div className="card bg-base-200 p-4 shadow-md">
+      <div className="card bg-base-200 p-2 pb-48 shadow-md">
         <h3 className="font-semibold mb-2">Receivers</h3>
 
         <input

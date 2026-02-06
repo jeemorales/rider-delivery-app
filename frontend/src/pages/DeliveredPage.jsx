@@ -78,7 +78,7 @@ export default function DeliveredPage() {
   }
 
   return (
-    <div className="space-y-6 p-2 sm:p-4 md:p-6">
+    <div className="space-y-6 p-2 sm:p-4 md:p-6 pb-12">
 
       {/* Header with Filter & Summary */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
