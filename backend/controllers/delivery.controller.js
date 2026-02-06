@@ -118,27 +118,68 @@ export const deleteDelivery = async (req, res) => {
 
 
 //GET RIDER DELIVERY HISTORY (DELIVERED + RETURNED - TODAY ONLY)
+// export const getDeliveryHistory = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     // Compute start and end of today
+//     const startOfDay = new Date();
+//     startOfDay.setHours(0, 0, 0, 0);
+
+//     const endOfDay = new Date();
+//     endOfDay.setHours(23, 59, 59, 999);
+
+//     const deliveries = await Delivery.find({
+//       userId,
+//       status: { $in: ["delivered", "returned"] },
+//       updatedAt: { $gte: startOfDay, $lte: endOfDay },
+//     })
+//       .populate("customerId")
+//       .sort({ updatedAt: -1 });
+//     res.json(deliveries);
+//   } catch (error) {
+//     console.log("Error in getDeliveryHistory controller:", error.message);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+//GET aLL RIDER DELIVERY HISTORY
 export const getDeliveryHistory = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Compute start and end of today
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const deliveries = await Delivery.find({
+    const history = await Delivery.find({
       userId,
-      status: { $in: ["delivered", "returned"] },
-      updatedAt: { $gte: startOfDay, $lte: endOfDay },
+      status: { $in: ["delivered", "returned"] }
     })
       .populate("customerId")
-      .sort({ updatedAt: -1 });
-    res.json(deliveries);
+      .sort({ updatedAt: -1 }); // latest first
+
+    res.json(history);
+
   } catch (error) {
     console.log("Error in getDeliveryHistory controller:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+//DELETE DELIVERY HISTORY FOR RETURN AND DELIVERED STATUS
+export const deleteDeliveryHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await Delivery.deleteMany({
+      userId,
+      status: { $in: ["delivered", "returned"] }
+    });
+
+    res.json({
+      message: "Delivery history cleared successfully",
+      deletedCount: result.deletedCount
+    });
+
+  } catch (error) {
+    console.log("Error in deleteDeliveryHistory controller:", error.message);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

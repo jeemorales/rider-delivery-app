@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
 import { CheckCircle } from "lucide-react";
+import { Toaster } from "react-hot-toast";
 
 
 export default function DeliveredPage() {
-  const { delivered, fetchAllDelivered } = useDeliveryStore();
+  const { delivered, fetchAllDelivered, deleteDeliveryHistory, loading  } = useDeliveryStore();
   const [openSummary, setOpenSummary] = useState(false);
   const [filter, setFilter] = useState("all"); // all, cash, gcash, returned
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -76,6 +77,20 @@ export default function DeliveredPage() {
       </div>
     );
   }
+
+  // ---------------------
+  // DELETE ALL DELIVER HISTORY
+  // ---------------------
+
+  const handleClearHistory = async () => {
+    const confirm = window.confirm(
+      "Are you sure you want to delete ALL delivery history?"
+    );
+
+    if (!confirm) return;
+
+    await deleteDeliveryHistory();
+  };
 
   return (
     <div className="space-y-6 p-2 sm:p-4 md:p-6 pb-12">
@@ -208,9 +223,19 @@ export default function DeliveredPage() {
             <div className="modal-action">
               <button className="btn btn-primary w-full sm:w-auto" onClick={() => setOpenSummary(false)}>Close</button>
             </div>
+            <button
+              className="btn btn-outline btn-error w-full sm:w-auto text-white"
+              onClick={handleClearHistory}
+              disabled={loading}
+            >
+              Clear History
+            </button>
+
           </div>
         </dialog>
       )}
+      <Toaster />
     </div>
+    
   );
 }

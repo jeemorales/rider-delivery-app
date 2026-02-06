@@ -1,11 +1,12 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
-import { deleteDelivery, addDelivery, getRiderDeliveries, getDeliveryHistory, markAsDelivered, markAsReturned } from "../controllers/delivery.controller.js"
+import { deleteDelivery, deleteDeliveryHistory, addDelivery, getRiderDeliveries, getDeliveryHistory, markAsDelivered, markAsReturned } from "../controllers/delivery.controller.js"
 
 const router = express.Router();
 
 router.post("/", protectRoute, addDelivery);
 router.get("/", protectRoute, getRiderDeliveries);
+router.delete("/", protectRoute, deleteDeliveryHistory);
 router.delete("/:id", protectRoute, deleteDelivery);
 router.get("/history", protectRoute, getDeliveryHistory);
 router.put("/delivered", protectRoute, markAsDelivered);

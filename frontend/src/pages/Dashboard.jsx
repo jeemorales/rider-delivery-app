@@ -90,7 +90,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      <section class="pt-2">
+      <section>
         <h2 className="text-lg font-semibold mb-2">Deliveries</h2>
         <DeliveryList
           deliveries={deliveries}

@@ -133,4 +133,37 @@ markAsDelivered: async (deliveryId, paymentType) => {
       return false;
     }
   },
+
+  // -------------------------
+  // DELETE DELIVERY HISTORY
+  // -------------------------
+  deleteDeliveryHistory: async () => {
+    try {
+      set({ loading: true });
+
+      const res = await axios.delete("/delivery");
+
+      // Clear delivered history from state after successful delete
+      set({
+        delivered: [],
+        loading: false,
+      });
+
+      toast.success(
+        res.data?.message || "Delivery history deleted successfully"
+      );
+
+      return true;
+    } catch (error) {
+      set({ loading: false });
+      console.log("Delete Delivery History Error:", error);
+
+      toast.error(
+        error.response?.data?.message || "Failed to delete delivery history"
+      );
+
+      return false;
+    }
+  },
+
 }));
