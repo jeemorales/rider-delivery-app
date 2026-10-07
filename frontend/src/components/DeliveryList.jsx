@@ -58,23 +58,6 @@ export default function DeliveryList({
   const { markAsDelivered, markAsReturned, deleteDelivery, loading } =
     useDeliveryStore();
 
-  // const submitMark = () => {
-  //   if (!selected) return;
-
-  //   if (!paymentType) {
-  //     toast.error("Please select a payment method");
-  //     return;
-  //   }
-
-  //   onMarkDelivered && onMarkDelivered(selected._id, paymentType);
-  //   markAsDelivered(selected._id, paymentType);
-
-  //   setDrawerOpen(false);
-  //   setSelected(null);
-  //   setShowPayment(false);
-  // };
-
-
   const submitMark = () => {
     if (!selected) return;
 
@@ -82,12 +65,6 @@ export default function DeliveryList({
       toast.error("Please select a payment method");
       return;
     }
-
-    const confirmSubmit = window.confirm(
-      "Are you sure you want to mark this delivery as delivered?"
-    );
-
-    if (!confirmSubmit) return;
 
     onMarkDelivered && onMarkDelivered(selected._id, paymentType);
     markAsDelivered(selected._id, paymentType);

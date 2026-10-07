@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
+import keepAliveCron from "./lib/cron";
 
 
 import { connectDB } from "./lib/db.js";
@@ -22,6 +23,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.get("/health", (_req, res) => {
+    res.json({ ok: true });
+});
+
 //ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/customer", customerRoutes);
@@ -41,6 +46,9 @@ app.listen(PORT, async () => {
   try {
     await connectDB();
     console.log(`✅ Server running on http://localhost:${PORT}`);
+    if(env.NODE_ENV === "production") {
+      keepAliveCron.start();
+    }
   } catch (error) {
     console.error("❌ Database connection failed:", error);
   }
