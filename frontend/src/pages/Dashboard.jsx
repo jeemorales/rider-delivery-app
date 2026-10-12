@@ -38,6 +38,9 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
+  // Reference for the HTML audio element (Fixed Audio Implementation)
+  const audioAlarmRef = useRef(null);
+
   // Load initial deliveries
   useEffect(() => {
     fetchDeliveries();
@@ -55,44 +58,26 @@ const Dashboard = () => {
       iosAudioCtx.resume();
     }
     
-    // Trigger dummy speech to unlock SpeechSynthesis on iOS Safari
+    // Fixed: Initialize HTML audio element upon first interaction to unlock it
+    if (audioAlarmRef.current) {
+      audioAlarmRef.current.play().then(() => {
+        // Successful dummy play, audio is now unlocked for this tab
+        audioAlarmRef.current.pause();
+        audioAlarmRef.current.currentTime = 0;
+        setIsAudioUnlocked(true);
+      }).catch((error) => {
+        console.log("Audio unlock failed, will try on next tap.", error);
+      });
+    }
+
+    // Still include dummy utterance as a fallback for voice synthesis
     if ("speechSynthesis" in window) {
       const dummyUtterance = new SpeechSynthesisUtterance("");
       window.speechSynthesis.speak(dummyUtterance);
     }
-
-    setIsAudioUnlocked(true);
   };
 
-  // Play Beep specifically tuned for iOS Safari AudioContext
-  const triggerAudioBeep = () => {
-    try {
-      if (!iosAudioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        iosAudioCtx = new AudioContext();
-      }
-      if (iosAudioCtx.state === "suspended") {
-        iosAudioCtx.resume();
-      }
-
-      const oscillator = iosAudioCtx.createOscillator();
-      const gainNode = iosAudioCtx.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, iosAudioCtx.currentTime); // High pitch beep
-      gainNode.gain.setValueAtTime(0.3, iosAudioCtx.currentTime);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(iosAudioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(iosAudioCtx.currentTime + 0.6);
-    } catch (e) {
-      console.error("iOS Audio Error:", e);
-    }
-  };
-
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER
+  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Fixed: Immediate Real-time Sorting)
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -100,25 +85,48 @@ const Dashboard = () => {
         (pos) => {
           const currentLat = pos.coords.latitude;
           const currentLng = pos.coords.longitude;
+          const newLoc = { lat: currentLat, lng: currentLng };
 
-          setRiderLocation({
-            lat: currentLat,
-            lng: currentLng,
+          setRiderLocation(newLoc);
+
+          // Calculate distance and update sorting IMMEDIATELY in state, without waiting for useMemo
+          setDeliveries((prevDeliveries) => {
+            if (!prevDeliveries) return [];
+            
+            // Map the distances based on the NEW location
+            const updated = prevDeliveries.map((item) => {
+              const itemLat = item.location?.lat ?? item.lat;
+              const itemLng = item.location?.lng ?? item.lng;
+              const hasValidCoords = itemLat != null && itemLng != null;
+              const distanceMeters = hasValidCoords
+                ? calculateDistance(currentLat, currentLng, itemLat, itemLng)
+                : Infinity;
+
+              return { ...item, distanceMeters, hasValidCoords };
+            });
+
+            // Re-order the entire list instantly
+            return updated.sort((a, b) => {
+              if (a.hasValidCoords && b.hasValidCoords) {
+                return a.distanceMeters - b.distanceMeters;
+              }
+              if (a.hasValidCoords && !b.hasValidCoords) return -1;
+              if (!a.hasValidCoords && b.hasValidCoords) return 1;
+              return 0;
+            });
           });
 
-          // Check proximity for items within 150 meters
-          deliveries.forEach((item) => {
-            const itemLat = item.location?.lat ?? item.lat;
-            const itemLng = item.location?.lng ?? item.lng;
+          // Proximity Alerts logic
+          // (Wait for state update to trigger these to avoid race conditions with setDeliveries)
+          setTimeout(() => {
+            useDeliveryStore.getState().deliveries.forEach((item) => {
+              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id)) {
+                // Play HTML Beep Sound
+                if (audioAlarmRef.current) {
+                  audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
+                }
 
-            if (itemLat != null && itemLng != null) {
-              const dist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
-
-              if (dist <= 150 && !alertedIds.has(item._id)) {
-                // 1. Play Beep
-                triggerAudioBeep();
-
-                // 2. Speak via iOS Speech Synthesis
+                // Speak via iOS Speech Synthesis
                 if ("speechSynthesis" in window) {
                   const utterance = new SpeechSynthesisUtterance(
                     `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
@@ -127,53 +135,26 @@ const Dashboard = () => {
                   window.speechSynthesis.speak(utterance);
                 }
 
-                // 3. Show Grab-Style Pop-up Modal
-                setActiveProximityAlert({ ...item, distanceMeters: dist });
+                // Show Grab-Style Pop-up Modal
+                setActiveProximityAlert({ ...item, distanceMeters: item.distanceMeters });
                 setAlertedIds((prev) => new Set(prev).add(item._id));
               }
-            }
-          });
+            });
+          }, 100);
+
         },
         (err) => console.error("iOS GPS Tracking Error:", err),
-        { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
       );
     }
 
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [isTracking, deliveries, alertedIds]);
+  }, [isTracking, alertedIds, setDeliveries]);
 
-  // SMART SORTING
-  const sortedDeliveries = useMemo(() => {
-    if (!deliveries) return [];
-
-    return [...deliveries]
-      .map((item) => {
-        const itemLat = item.location?.lat ?? item.lat;
-        const itemLng = item.location?.lng ?? item.lng;
-
-        const hasValidCoords = itemLat != null && itemLng != null;
-        const distanceMeters =
-          hasValidCoords && riderLocation
-            ? calculateDistance(riderLocation.lat, riderLocation.lng, itemLat, itemLng)
-            : Infinity;
-
-        return {
-          ...item,
-          distanceMeters,
-          hasValidCoords,
-        };
-      })
-      .sort((a, b) => {
-        if (a.hasValidCoords && b.hasValidCoords) {
-          return a.distanceMeters - b.distanceMeters;
-        }
-        if (a.hasValidCoords && !b.hasValidCoords) return -1;
-        if (!a.hasValidCoords && b.hasValidCoords) return 1;
-        return 0;
-      });
-  }, [deliveries, riderLocation]);
+  // SMART SORTING (Removed as logic was moved into watchPosition state update)
+  // We use the raw 'deliveries' state directly now because it is already sorted by watchPosition.
 
   // Navigation Intent for iOS (Opens Apple Maps / Google Maps)
   const openExternalNavigation = (lat, lng) => {
@@ -215,6 +196,13 @@ const Dashboard = () => {
       onClick={handleUnlockAudio} 
       className="p-3 md:p-6 max-w-6xl mx-auto space-y-4 relative"
     >
+      {/* Fixed: Invisible HTML Audio Element */}
+      <audio 
+        ref={audioAlarmRef} 
+        src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" 
+        preload="auto" 
+      />
+
       {/* iOS Safari Audio Status Banner */}
       {!isAudioUnlocked && (
         <div className="bg-primary/10 border border-primary text-primary p-2.5 rounded-xl text-xs flex justify-between items-center">
@@ -263,18 +251,18 @@ const Dashboard = () => {
 
         <div className="relative z-0 rounded-xl overflow-hidden border border-base-200">
           <DeliveryMap
-            deliveries={sortedDeliveries}
+            deliveries={deliveries} // Using direct, watchPosition-sorted deliveries
             selectedDelivery={selectedDelivery}
             riderLocation={riderLocation}
           />
         </div>
       </section>
 
-      {/* Queue Section */}
+      {/* Queue Section (Fixed: Dynamically updates real-time) */}
       <section>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">
-            Deliveries Queue ({sortedDeliveries.length})
+            Deliveries Queue ({deliveries.length})
           </h2>
           <span className="text-xs badge badge-primary font-mono">
             Auto-Sorted by Nearest
@@ -282,7 +270,7 @@ const Dashboard = () => {
         </div>
 
         <DeliveryList
-          deliveries={sortedDeliveries}
+          deliveries={deliveries} // Using direct, watchPosition-sorted deliveries
           onSelectDelivery={(d) => {
             handleUnlockAudio();
             setSelectedDelivery(d);
