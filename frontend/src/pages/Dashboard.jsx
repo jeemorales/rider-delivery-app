@@ -38,7 +38,7 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
-  // Reference for the HTML audio element (Fixed Audio Implementation)
+  // Reference for the HTML audio element
   const audioAlarmRef = useRef(null);
 
   // Load initial deliveries
@@ -58,10 +58,8 @@ const Dashboard = () => {
       iosAudioCtx.resume();
     }
     
-    // Fixed: Initialize HTML audio element upon first interaction to unlock it
     if (audioAlarmRef.current) {
       audioAlarmRef.current.play().then(() => {
-        // Successful dummy play, audio is now unlocked for this tab
         audioAlarmRef.current.pause();
         audioAlarmRef.current.currentTime = 0;
         setIsAudioUnlocked(true);
@@ -70,14 +68,13 @@ const Dashboard = () => {
       });
     }
 
-    // Still include dummy utterance as a fallback for voice synthesis
     if ("speechSynthesis" in window) {
       const dummyUtterance = new SpeechSynthesisUtterance("");
       window.speechSynthesis.speak(dummyUtterance);
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Fixed: Immediate Real-time Sorting)
+  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -89,11 +86,10 @@ const Dashboard = () => {
 
           setRiderLocation(newLoc);
 
-          // Calculate distance and update sorting IMMEDIATELY in state, without waiting for useMemo
+          // Calculate distance and update sorting in real-time
           setDeliveries((prevDeliveries) => {
             if (!prevDeliveries) return [];
             
-            // Map the distances based on the NEW location
             const updated = prevDeliveries.map((item) => {
               const itemLat = item.location?.lat ?? item.lat;
               const itemLng = item.location?.lng ?? item.lng;
@@ -105,7 +101,6 @@ const Dashboard = () => {
               return { ...item, distanceMeters, hasValidCoords };
             });
 
-            // Re-order the entire list instantly
             return updated.sort((a, b) => {
               if (a.hasValidCoords && b.hasValidCoords) {
                 return a.distanceMeters - b.distanceMeters;
@@ -117,10 +112,10 @@ const Dashboard = () => {
           });
 
           // Proximity Alerts logic
-          // (Wait for state update to trigger these to avoid race conditions with setDeliveries)
           setTimeout(() => {
             useDeliveryStore.getState().deliveries.forEach((item) => {
-              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id)) {
+              // I-check kung malapit na, hindi pa tapos, at hindi pa na-alert
+              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
                 // Play HTML Beep Sound
                 if (audioAlarmRef.current) {
                   audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
@@ -135,7 +130,7 @@ const Dashboard = () => {
                   window.speechSynthesis.speak(utterance);
                 }
 
-                // Show Grab-Style Pop-up Modal
+                // Show Grab-Style Pop-up Modal (Mananatili pa rin ang item sa main deliveries list)
                 setActiveProximityAlert({ ...item, distanceMeters: item.distanceMeters });
                 setAlertedIds((prev) => new Set(prev).add(item._id));
               }
@@ -153,10 +148,7 @@ const Dashboard = () => {
     };
   }, [isTracking, alertedIds, setDeliveries]);
 
-  // SMART SORTING (Removed as logic was moved into watchPosition state update)
-  // We use the raw 'deliveries' state directly now because it is already sorted by watchPosition.
-
-  // Navigation Intent for iOS (Opens Apple Maps / Google Maps)
+  // Navigation Intent for iOS / Android (Opens Apple Maps / Google Maps)
   const openExternalNavigation = (lat, lng) => {
     if (lat && lng) {
       window.open(`https://maps.apple.com/?daddr=${lat},${lng}`, "_blank");
@@ -175,12 +167,14 @@ const Dashboard = () => {
     }
   }, []);
 
+  // Mark delivery as delivered (Dito pa lang mawawala o magbabago ang status sa listahan)
   const markAsDelivered = (deliveryId, paymentType) => {
     const found = deliveries.find((d) => d._id === deliveryId);
     if (!found) return;
 
     const deliveredItem = {
       ...found,
+      status: "completed",
       deliveredAt: new Date().toISOString(),
       paymentType,
     };
@@ -188,7 +182,7 @@ const Dashboard = () => {
     setDeliveries(
       deliveries.map((d) => (d._id === deliveryId ? deliveredItem : d))
     );
-    setActiveProximityAlert(null);
+    setActiveProximityAlert(null); // Isara lang ang popup, ang pag-alis sa listahan ay depende na sa store filter mo para sa completed items
   };
 
   return (
@@ -196,7 +190,7 @@ const Dashboard = () => {
       onClick={handleUnlockAudio} 
       className="p-3 md:p-6 max-w-6xl mx-auto space-y-4 relative"
     >
-      {/* Fixed: Invisible HTML Audio Element */}
+      {/* Invisible HTML Audio Element */}
       <audio 
         ref={audioAlarmRef} 
         src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" 
@@ -251,14 +245,14 @@ const Dashboard = () => {
 
         <div className="relative z-0 rounded-xl overflow-hidden border border-base-200">
           <DeliveryMap
-            deliveries={deliveries} // Using direct, watchPosition-sorted deliveries
+            deliveries={deliveries}
             selectedDelivery={selectedDelivery}
             riderLocation={riderLocation}
           />
         </div>
       </section>
 
-      {/* Queue Section (Fixed: Dynamically updates real-time) */}
+      {/* Queue Section */}
       <section>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">
@@ -270,7 +264,7 @@ const Dashboard = () => {
         </div>
 
         <DeliveryList
-          deliveries={deliveries} // Using direct, watchPosition-sorted deliveries
+          deliveries={deliveries}
           onSelectDelivery={(d) => {
             handleUnlockAudio();
             setSelectedDelivery(d);
@@ -337,7 +331,7 @@ const Dashboard = () => {
               onClick={() => markAsDelivered(activeProximityAlert._id, "COD")}
               className="btn btn-success btn-block text-white font-bold text-base shadow-lg"
             >
-              ✅ Mark as Delivered
+              ✅ Mark as Delivered (Cash / GCash)
             </button>
           </div>
         </div>
