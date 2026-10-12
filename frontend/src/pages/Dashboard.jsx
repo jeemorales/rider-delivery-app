@@ -4,14 +4,13 @@ import DeliveryList from "../components/DeliveryList";
 import DeliveryProgress from "../components/DeliveryProgress";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
 
-// Robust Helper: Extractor para sa Latitude at Longitude mula sa iba't ibang data structure
+// Helper: Extractor para sa Latitude at Longitude
 const extractLatLng = (item) => {
   if (!item) return { lat: null, lng: null };
 
   let lat = item.lat ?? item.latitude ?? item.location?.lat ?? item.location?.latitude;
   let lng = item.lng ?? item.longitude ?? item.location?.lng ?? item.location?.longitude;
 
-  // Suporta para sa MongoDB GeoJSON format [lng, lat]
   if ((lat == null || lng == null) && Array.isArray(item.location?.coordinates)) {
     lng = item.location.coordinates[0];
     lat = item.location.coordinates[1];
@@ -26,11 +25,11 @@ const extractLatLng = (item) => {
   };
 };
 
-// Haversine Formula para sa eksaktong distansya sa metro
+// Haversine Formula para sa distansya sa metro
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
   
-  const R = 6371000; // Earth radius in METERS
+  const R = 6371000; // Earth radius in meters
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   
@@ -42,7 +41,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
       Math.sin(dLon / 2);
       
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distansya sa METRO
+  return R * c;
 };
 
 let iosAudioCtx = null;
@@ -64,9 +63,22 @@ const Dashboard = () => {
 
   const audioAlarmRef = useRef(null);
 
-  // Initial Fetch mula sa backend
+  // Initial fetch at agad na kunin ang GPS location sa unang pasok
   useEffect(() => {
     fetchDeliveries();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setRiderLocation({
+            lat: parseFloat(pos.coords.latitude),
+            lng: parseFloat(pos.coords.longitude),
+          });
+        },
+        (err) => console.error("Initial GPS Error:", err),
+        { enableHighAccuracy: true }
+      );
+    }
   }, [fetchDeliveries]);
 
   // Unlock iOS Safari Audio
@@ -118,7 +130,7 @@ const Dashboard = () => {
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY
+  // REAL-TIME GPS WATCHER & PROXIMITY TRIGGER
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -170,11 +182,10 @@ const Dashboard = () => {
     };
   }, [isTracking, deliveries, alertedIds]);
 
-  // 🎯 STRICT REAL-TIME DISTANCE SORTING (Inaayos ang pagkakasunod-sunod nina Kristhea at Nova)
+  // 🎯 STRICT REAL-TIME DISTANCE SORTING (Inuuna ang pinakamalapit sa rider)
   const sortedDeliveries = useMemo(() => {
     if (!deliveries) return [];
 
-    // Filter out completed/returned items
     const activeDeliveries = deliveries.filter(
       (item) => item.status !== "completed" && item.status !== "returned"
     );
@@ -203,14 +214,11 @@ const Dashboard = () => {
         };
       })
       .sort((a, b) => {
-        // Unahin ang may valid na distansya, i-sort mula pinakamaliit (mas malapit) hanggang pinakamalaki
         if (a.hasValidCoords && b.hasValidCoords) {
-          return a.distanceMeters - b.distanceMeters;
+          return a.distanceMeters - b.distanceMeters; // Pinakamalapit ang mauuna
         }
         if (a.hasValidCoords && !b.hasValidCoords) return -1;
         if (!a.hasValidCoords && b.hasValidCoords) return 1;
-        
-        // Fallback kung walang coordinates
         return 0;
       });
   }, [deliveries, riderLocation]);
