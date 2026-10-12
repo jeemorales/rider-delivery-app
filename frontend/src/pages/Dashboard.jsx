@@ -38,10 +38,10 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
-  // Reference for the HTML audio element (Fixed Audio Implementation)
+  // Reference for the HTML audio element
   const audioAlarmRef = useRef(null);
 
-  // Load initial deliveries
+  // Load initial deliveries once on mount
   useEffect(() => {
     fetchDeliveries();
   }, [fetchDeliveries]);
@@ -58,10 +58,8 @@ const Dashboard = () => {
       iosAudioCtx.resume();
     }
     
-    // Fixed: Initialize HTML audio element upon first interaction to unlock it
     if (audioAlarmRef.current) {
       audioAlarmRef.current.play().then(() => {
-        // Successful dummy play, audio is now unlocked for this tab
         audioAlarmRef.current.pause();
         audioAlarmRef.current.currentTime = 0;
         setIsAudioUnlocked(true);
@@ -70,7 +68,6 @@ const Dashboard = () => {
       });
     }
 
-    // Still include dummy utterance as a fallback for voice synthesis
     if ("speechSynthesis" in window) {
       const dummyUtterance = new SpeechSynthesisUtterance("");
       window.speechSynthesis.speak(dummyUtterance);
@@ -92,7 +89,7 @@ const Dashboard = () => {
       const gainNode = iosAudioCtx.createGain();
 
       oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, iosAudioCtx.currentTime); // High pitch beep
+      oscillator.frequency.setValueAtTime(880, iosAudioCtx.currentTime);
       gainNode.gain.setValueAtTime(0.3, iosAudioCtx.currentTime);
 
       oscillator.connect(gainNode);
@@ -105,7 +102,7 @@ const Dashboard = () => {
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Fixed: Persistent List Sorting)
+  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Safe Location Updates Only)
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -113,94 +110,89 @@ const Dashboard = () => {
         (pos) => {
           const currentLat = pos.coords.latitude;
           const currentLng = pos.coords.longitude;
-          const newLoc = { lat: currentLat, lng: currentLng };
 
-          // Keep last known location if new loc is not accurate or has error
+          // Only update rider location if coordinates are valid, ensuring list is never wiped out
           if (currentLat != null && currentLng != null) {
-            setRiderLocation(newLoc);
-          } else {
-            // Log error but do not clear the location, keep the previous one
-            console.error("No valid location data received.");
-            return; 
+            setRiderLocation({ lat: currentLat, lng: currentLng });
+
+            // Check Proximity alerts safely against current store deliveries
+            if (deliveries && deliveries.length > 0) {
+              deliveries.forEach((item) => {
+                const itemLat = item.location?.lat ?? item.lat;
+                const itemLng = item.location?.lng ?? item.lng;
+
+                if (itemLat != null && itemLng != null) {
+                  const dist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
+
+                  if (dist <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
+                    if (audioAlarmRef.current) {
+                      audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
+                    }
+                    triggerAudioBeep();
+
+                    if ("speechSynthesis" in window) {
+                      const utterance = new SpeechSynthesisUtterance(
+                        `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
+                      );
+                      utterance.lang = "tl-PH";
+                      window.speechSynthesis.speak(utterance);
+                    }
+
+                    setActiveProximityAlert({ ...item, distanceMeters: dist });
+                    setAlertedIds((prev) => new Set(prev).add(item._id));
+                  }
+                }
+              });
+            }
           }
-
-          // Fixed: Calculate distance and update sorting in real-time, PERSISTENTLY
-          setDeliveries((prevDeliveries) => {
-            if (!prevDeliveries || prevDeliveries.length === 0) return [];
-            
-            // Map the distances based on the NEW location
-            const updated = prevDeliveries.map((item) => {
-              const itemLat = item.location?.lat ?? item.lat;
-              const itemLng = item.location?.lng ?? item.lng;
-              const hasValidCoords = itemLat != null && itemLng != null;
-              const distanceMeters = hasValidCoords
-                ? calculateDistance(currentLat, currentLng, itemLat, itemLng)
-                : Infinity;
-
-              return { ...item, distanceMeters, hasValidCoords };
-            });
-
-            // Re-order the entire list instantly
-            return updated.sort((a, b) => {
-              if (a.hasValidCoords && b.hasValidCoords) {
-                return a.distanceMeters - b.distanceMeters;
-              }
-              if (a.hasValidCoords && !b.hasValidCoords) return -1;
-              if (!a.hasValidCoords && b.hasValidCoords) return 1;
-              return 0;
-            });
-          });
-
-          // Proximity Alerts logic
-          // (Wait for state update to trigger these to avoid race conditions with setDeliveries)
-          setTimeout(() => {
-            const currentDeliveries = useDeliveryStore.getState().deliveries;
-            if (!currentDeliveries) return;
-
-            currentDeliveries.forEach((item) => {
-              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id) && item.status !== "completed" && item.status !== "returned") {
-                // Play HTML Beep Sound
-                if (audioAlarmRef.current) {
-                  audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
-                }
-
-                // Play Native Beep Sound
-                triggerAudioBeep();
-
-                // Speak via iOS Speech Synthesis
-                if ("speechSynthesis" in window) {
-                  const utterance = new SpeechSynthesisUtterance(
-                    `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
-                  );
-                  utterance.lang = "tl-PH";
-                  window.speechSynthesis.speak(utterance);
-                }
-
-                // Show Grab-Style Pop-up Modal
-                setActiveProximityAlert({ ...item, distanceMeters: item.distanceMeters });
-                setAlertedIds((prev) => new Set(prev).add(item._id));
-              }
-            });
-          }, 100);
-
         },
         (err) => {
-          console.error("iOS GPS Tracking Error:", err);
-          // Keep tracking active and keep existing state
+          console.error("GPS Tracking Error:", err);
         },
-        // Config changes: Removed strict timeout/maximumAge for persistence on iPhone
-        { enableHighAccuracy: true, maximumAge: Infinity, timeout: 60000 } 
+        { enableHighAccuracy: true, maximumAge: Infinity, timeout: 60000 }
       );
     }
 
     return () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
-  }, [isTracking, alertedIds, setDeliveries]);
+  }, [isTracking, deliveries, alertedIds]);
 
-  // SMART SORTING (Removed as logic was moved into watchPosition state update)
+  // SMART PERSISTENT SORTING: Automatically re-orders items by proximity without deleting them
+  const sortedDeliveries = useMemo(() => {
+    if (!deliveries || deliveries.length === 0) return [];
 
-  // Navigation Intent for iOS / Android (Opens Apple Maps / Google Maps)
+    // Filter out items that are already completed so they disappear only when status is set
+    const activeDeliveries = deliveries.filter(item => item.status !== "completed");
+
+    return activeDeliveries
+      .map((item) => {
+        const itemLat = item.location?.lat ?? item.lat;
+        const itemLng = item.location?.lng ?? item.lng;
+
+        const hasValidCoords = itemLat != null && itemLng != null;
+        const distanceMeters =
+          hasValidCoords && riderLocation
+            ? calculateDistance(riderLocation.lat, riderLocation.lng, itemLat, itemLng)
+            : Infinity;
+
+        return {
+          ...item,
+          distanceMeters,
+          hasValidCoords,
+        };
+      })
+      .sort((a, b) => {
+        if (a.hasValidCoords && b.hasValidCoords) {
+          return a.distanceMeters - b.distanceMeters;
+        }
+        if (a.hasValidCoords && !b.hasValidCoords) return -1;
+        if (!a.hasValidCoords && b.hasValidCoords) return 1;
+        return 0;
+      });
+  }, [deliveries, riderLocation]);
+
+  // Navigation Intent for iOS / Android
   const openExternalNavigation = (lat, lng) => {
     if (lat && lng) {
       window.open(`https://maps.apple.com/?daddr=${lat},${lng}`, "_blank");
@@ -219,23 +211,20 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Update Status and remove from list (manual trigger)
-  const updateDeliveryStatus = (deliveryId, status, paymentType = null) => {
+  // Manual status update: This is the ONLY way an item leaves the For Delivery list
+  const markAsDelivered = (deliveryId, paymentType) => {
     const found = deliveries.find((d) => d._id === deliveryId);
     if (!found) return;
 
-    const updatedItem = {
+    const deliveredItem = {
       ...found,
-      status, // 'completed' or 'returned'
-      deliveredAt: status === "completed" ? new Date().toISOString() : null,
-      returnedAt: status === "returned" ? new Date().toISOString() : null,
+      status: "completed",
+      deliveredAt: new Date().toISOString(),
       paymentType,
     };
 
-    // Keep item in list but with updated status. Your DeliveryList component 
-    // should filter this out if you don't want completed items displayed.
     setDeliveries(
-      deliveries.map((d) => (d._id === deliveryId ? updatedItem : d))
+      deliveries.map((d) => (d._id === deliveryId ? deliveredItem : d))
     );
     setActiveProximityAlert(null);
   };
@@ -300,18 +289,18 @@ const Dashboard = () => {
 
         <div className="relative z-0 rounded-xl overflow-hidden border border-base-200">
           <DeliveryMap
-            deliveries={deliveries}
+            deliveries={sortedDeliveries}
             selectedDelivery={selectedDelivery}
             riderLocation={riderLocation}
           />
         </div>
       </section>
 
-      {/* Queue Section (Fixed: Dynamically updates real-time, PERSISTENT) */}
+      {/* Queue Section: Persistent, auto-sorted by distance, updates in real-time without refreshing */}
       <section>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">
-            Deliveries Queue ({deliveries.length})
+            Deliveries Queue ({sortedDeliveries.length})
           </h2>
           <span className="text-xs badge badge-primary font-mono">
             Auto-Sorted by Nearest
@@ -319,20 +308,19 @@ const Dashboard = () => {
         </div>
 
         <DeliveryList
-          deliveries={deliveries}
+          deliveries={sortedDeliveries}
           onSelectDelivery={(d) => {
             handleUnlockAudio();
             setSelectedDelivery(d);
           }}
-          onMarkDelivered={(id, pay) => updateDeliveryStatus(id, "completed", pay)}
-          onMarkReturned={(id) => updateDeliveryStatus(id, "returned")}
+          onMarkDelivered={markAsDelivered}
           onDeliveriesUpdate={setDeliveries}
         />
       </section>
 
       {/* 🚨 PROXIMITY POP-UP MODAL */}
       {activeProximityAlert && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-base-100 border-2 border-primary w-full max-w-lg rounded-2xl p-5 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2">
@@ -383,21 +371,12 @@ const Dashboard = () => {
               </a>
             </div>
 
-            {/* Quick Actions for Pop-up */}
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <button
-                onClick={() => updateDeliveryStatus(activeProximityAlert._id, "completed", "COD")}
-                className="btn btn-success btn-sm text-white font-bold text-xs shadow-md"
-              >
-                ✅ Delivered (Cash)
-              </button>
-              <button
-                onClick={() => updateDeliveryStatus(activeProximityAlert._id, "returned")}
-                className="btn btn-error btn-sm text-white font-bold text-xs shadow-md"
-              >
-                ❌ Return Parcel
-              </button>
-            </div>
+            <button
+              onClick={() => markAsDelivered(activeProximityAlert._id, "COD")}
+              className="btn btn-success btn-block text-white font-bold text-base shadow-lg"
+            >
+              ✅ Mark as Delivered (Receive / Cash / GCash)
+            </button>
           </div>
         </div>
       )}
