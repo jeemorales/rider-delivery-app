@@ -38,7 +38,7 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
-  // Reference for the HTML audio element
+  // Reference for the HTML audio element (Fixed Audio Implementation)
   const audioAlarmRef = useRef(null);
 
   // Load initial deliveries
@@ -58,8 +58,10 @@ const Dashboard = () => {
       iosAudioCtx.resume();
     }
     
+    // Fixed: Initialize HTML audio element upon first interaction to unlock it
     if (audioAlarmRef.current) {
       audioAlarmRef.current.play().then(() => {
+        // Successful dummy play, audio is now unlocked for this tab
         audioAlarmRef.current.pause();
         audioAlarmRef.current.currentTime = 0;
         setIsAudioUnlocked(true);
@@ -68,13 +70,42 @@ const Dashboard = () => {
       });
     }
 
+    // Still include dummy utterance as a fallback for voice synthesis
     if ("speechSynthesis" in window) {
       const dummyUtterance = new SpeechSynthesisUtterance("");
       window.speechSynthesis.speak(dummyUtterance);
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER
+  // Play Beep specifically tuned for iOS Safari AudioContext
+  const triggerAudioBeep = () => {
+    try {
+      if (!iosAudioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        iosAudioCtx = new AudioContext();
+      }
+      if (iosAudioCtx.state === "suspended") {
+        iosAudioCtx.resume();
+      }
+
+      const oscillator = iosAudioCtx.createOscillator();
+      const gainNode = iosAudioCtx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, iosAudioCtx.currentTime); // High pitch beep
+      gainNode.gain.setValueAtTime(0.3, iosAudioCtx.currentTime);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(iosAudioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(iosAudioCtx.currentTime + 0.6);
+    } catch (e) {
+      console.error("iOS Audio Error:", e);
+    }
+  };
+
+  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Fixed: Persistent List Sorting)
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -84,12 +115,20 @@ const Dashboard = () => {
           const currentLng = pos.coords.longitude;
           const newLoc = { lat: currentLat, lng: currentLng };
 
-          setRiderLocation(newLoc);
+          // Keep last known location if new loc is not accurate or has error
+          if (currentLat != null && currentLng != null) {
+            setRiderLocation(newLoc);
+          } else {
+            // Log error but do not clear the location, keep the previous one
+            console.error("No valid location data received.");
+            return; 
+          }
 
-          // Calculate distance and update sorting in real-time
+          // Fixed: Calculate distance and update sorting in real-time, PERSISTENTLY
           setDeliveries((prevDeliveries) => {
-            if (!prevDeliveries) return [];
+            if (!prevDeliveries || prevDeliveries.length === 0) return [];
             
+            // Map the distances based on the NEW location
             const updated = prevDeliveries.map((item) => {
               const itemLat = item.location?.lat ?? item.lat;
               const itemLng = item.location?.lng ?? item.lng;
@@ -101,6 +140,7 @@ const Dashboard = () => {
               return { ...item, distanceMeters, hasValidCoords };
             });
 
+            // Re-order the entire list instantly
             return updated.sort((a, b) => {
               if (a.hasValidCoords && b.hasValidCoords) {
                 return a.distanceMeters - b.distanceMeters;
@@ -112,14 +152,20 @@ const Dashboard = () => {
           });
 
           // Proximity Alerts logic
+          // (Wait for state update to trigger these to avoid race conditions with setDeliveries)
           setTimeout(() => {
-            useDeliveryStore.getState().deliveries.forEach((item) => {
-              // I-check kung malapit na, hindi pa tapos, at hindi pa na-alert
-              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
+            const currentDeliveries = useDeliveryStore.getState().deliveries;
+            if (!currentDeliveries) return;
+
+            currentDeliveries.forEach((item) => {
+              if (item.hasValidCoords && item.distanceMeters <= 150 && !alertedIds.has(item._id) && item.status !== "completed" && item.status !== "returned") {
                 // Play HTML Beep Sound
                 if (audioAlarmRef.current) {
                   audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
                 }
+
+                // Play Native Beep Sound
+                triggerAudioBeep();
 
                 // Speak via iOS Speech Synthesis
                 if ("speechSynthesis" in window) {
@@ -130,7 +176,7 @@ const Dashboard = () => {
                   window.speechSynthesis.speak(utterance);
                 }
 
-                // Show Grab-Style Pop-up Modal (Mananatili pa rin ang item sa main deliveries list)
+                // Show Grab-Style Pop-up Modal
                 setActiveProximityAlert({ ...item, distanceMeters: item.distanceMeters });
                 setAlertedIds((prev) => new Set(prev).add(item._id));
               }
@@ -138,8 +184,12 @@ const Dashboard = () => {
           }, 100);
 
         },
-        (err) => console.error("iOS GPS Tracking Error:", err),
-        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+        (err) => {
+          console.error("iOS GPS Tracking Error:", err);
+          // Keep tracking active and keep existing state
+        },
+        // Config changes: Removed strict timeout/maximumAge for persistence on iPhone
+        { enableHighAccuracy: true, maximumAge: Infinity, timeout: 60000 } 
       );
     }
 
@@ -147,6 +197,8 @@ const Dashboard = () => {
       if (watchId) navigator.geolocation.clearWatch(watchId);
     };
   }, [isTracking, alertedIds, setDeliveries]);
+
+  // SMART SORTING (Removed as logic was moved into watchPosition state update)
 
   // Navigation Intent for iOS / Android (Opens Apple Maps / Google Maps)
   const openExternalNavigation = (lat, lng) => {
@@ -167,22 +219,25 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Mark delivery as delivered (Dito pa lang mawawala o magbabago ang status sa listahan)
-  const markAsDelivered = (deliveryId, paymentType) => {
+  // Update Status and remove from list (manual trigger)
+  const updateDeliveryStatus = (deliveryId, status, paymentType = null) => {
     const found = deliveries.find((d) => d._id === deliveryId);
     if (!found) return;
 
-    const deliveredItem = {
+    const updatedItem = {
       ...found,
-      status: "completed",
-      deliveredAt: new Date().toISOString(),
+      status, // 'completed' or 'returned'
+      deliveredAt: status === "completed" ? new Date().toISOString() : null,
+      returnedAt: status === "returned" ? new Date().toISOString() : null,
       paymentType,
     };
 
+    // Keep item in list but with updated status. Your DeliveryList component 
+    // should filter this out if you don't want completed items displayed.
     setDeliveries(
-      deliveries.map((d) => (d._id === deliveryId ? deliveredItem : d))
+      deliveries.map((d) => (d._id === deliveryId ? updatedItem : d))
     );
-    setActiveProximityAlert(null); // Isara lang ang popup, ang pag-alis sa listahan ay depende na sa store filter mo para sa completed items
+    setActiveProximityAlert(null);
   };
 
   return (
@@ -252,7 +307,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Queue Section */}
+      {/* Queue Section (Fixed: Dynamically updates real-time, PERSISTENT) */}
       <section>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">
@@ -269,14 +324,15 @@ const Dashboard = () => {
             handleUnlockAudio();
             setSelectedDelivery(d);
           }}
-          onMarkDelivered={markAsDelivered}
+          onMarkDelivered={(id, pay) => updateDeliveryStatus(id, "completed", pay)}
+          onMarkReturned={(id) => updateDeliveryStatus(id, "returned")}
           onDeliveriesUpdate={setDeliveries}
         />
       </section>
 
       {/* 🚨 PROXIMITY POP-UP MODAL */}
       {activeProximityAlert && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-base-100 border-2 border-primary w-full max-w-lg rounded-2xl p-5 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b pb-3">
               <div className="flex items-center gap-2">
@@ -327,12 +383,21 @@ const Dashboard = () => {
               </a>
             </div>
 
-            <button
-              onClick={() => markAsDelivered(activeProximityAlert._id, "COD")}
-              className="btn btn-success btn-block text-white font-bold text-base shadow-lg"
-            >
-              ✅ Mark as Delivered (Cash / GCash)
-            </button>
+            {/* Quick Actions for Pop-up */}
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <button
+                onClick={() => updateDeliveryStatus(activeProximityAlert._id, "completed", "COD")}
+                className="btn btn-success btn-sm text-white font-bold text-xs shadow-md"
+              >
+                ✅ Delivered (Cash)
+              </button>
+              <button
+                onClick={() => updateDeliveryStatus(activeProximityAlert._id, "returned")}
+                className="btn btn-error btn-sm text-white font-bold text-xs shadow-md"
+              >
+                ❌ Return Parcel
+              </button>
+            </div>
           </div>
         </div>
       )}
