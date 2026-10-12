@@ -38,10 +38,10 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
-  // Reference for the HTML audio element
+  // Reference for HTML audio element
   const audioAlarmRef = useRef(null);
 
-  // Load initial deliveries once on mount
+  // Load initial deliveries from store/database
   useEffect(() => {
     fetchDeliveries();
   }, [fetchDeliveries]);
@@ -74,7 +74,6 @@ const Dashboard = () => {
     }
   };
 
-  // Play Beep specifically tuned for iOS Safari AudioContext
   const triggerAudioBeep = () => {
     try {
       if (!iosAudioCtx) {
@@ -102,7 +101,7 @@ const Dashboard = () => {
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER (Safe Location Updates Only)
+  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
@@ -111,44 +110,41 @@ const Dashboard = () => {
           const currentLat = pos.coords.latitude;
           const currentLng = pos.coords.longitude;
 
-          // Only update rider location if coordinates are valid, ensuring list is never wiped out
           if (currentLat != null && currentLng != null) {
             setRiderLocation({ lat: currentLat, lng: currentLng });
+          }
 
-            // Check Proximity alerts safely against current store deliveries
-            if (deliveries && deliveries.length > 0) {
-              deliveries.forEach((item) => {
-                const itemLat = item.location?.lat ?? item.lat;
-                const itemLng = item.location?.lng ?? item.lng;
+          // Proximity Alerts logic based on current store deliveries
+          if (deliveries && deliveries.length > 0) {
+            deliveries.forEach((item) => {
+              const itemLat = item.location?.lat ?? item.lat;
+              const itemLng = item.location?.lng ?? item.lng;
 
-                if (itemLat != null && itemLng != null) {
-                  const dist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
+              if (itemLat != null && itemLng != null) {
+                const dist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
 
-                  if (dist <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
-                    if (audioAlarmRef.current) {
-                      audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
-                    }
-                    triggerAudioBeep();
-
-                    if ("speechSynthesis" in window) {
-                      const utterance = new SpeechSynthesisUtterance(
-                        `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
-                      );
-                      utterance.lang = "tl-PH";
-                      window.speechSynthesis.speak(utterance);
-                    }
-
-                    setActiveProximityAlert({ ...item, distanceMeters: dist });
-                    setAlertedIds((prev) => new Set(prev).add(item._id));
+                if (dist <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
+                  if (audioAlarmRef.current) {
+                    audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
                   }
+                  triggerAudioBeep();
+
+                  if ("speechSynthesis" in window) {
+                    const utterance = new SpeechSynthesisUtterance(
+                      `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
+                    );
+                    utterance.lang = "tl-PH";
+                    window.speechSynthesis.speak(utterance);
+                  }
+
+                  setActiveProximityAlert({ ...item, distanceMeters: dist });
+                  setAlertedIds((prev) => new Set(prev).add(item._id));
                 }
-              });
-            }
+              }
+            });
           }
         },
-        (err) => {
-          console.error("GPS Tracking Error:", err);
-        },
+        (err) => console.error("GPS Tracking Error:", err),
         { enableHighAccuracy: true, maximumAge: Infinity, timeout: 60000 }
       );
     }
@@ -158,14 +154,13 @@ const Dashboard = () => {
     };
   }, [isTracking, deliveries, alertedIds]);
 
-  // SMART PERSISTENT SORTING: Automatically re-orders items by proximity without deleting them
+  // AUTOMATIC SMART SORTING (Naayos para unahin ang pinakamalapit kapag aktibo ang GPS)
   const sortedDeliveries = useMemo(() => {
-    if (!deliveries || deliveries.length === 0) return [];
+    if (!deliveries) return [];
 
-    // Filter out items that are already completed so they disappear only when status is set
     const activeDeliveries = deliveries.filter(item => item.status !== "completed");
 
-    return activeDeliveries
+    return [...activeDeliveries]
       .map((item) => {
         const itemLat = item.location?.lat ?? item.lat;
         const itemLng = item.location?.lng ?? item.lng;
@@ -183,16 +178,18 @@ const Dashboard = () => {
         };
       })
       .sort((a, b) => {
+        // Kung parehong may GPS coordinates at may Rider Location na naka-lock
         if (a.hasValidCoords && b.hasValidCoords) {
           return a.distanceMeters - b.distanceMeters;
         }
         if (a.hasValidCoords && !b.hasValidCoords) return -1;
         if (!a.hasValidCoords && b.hasValidCoords) return 1;
-        return 0;
+        
+        // Fallback: Kung wala pang GPS, pagsunod-sunurin base sa pinakabago (descending ID/date)
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       });
   }, [deliveries, riderLocation]);
 
-  // Navigation Intent for iOS / Android
   const openExternalNavigation = (lat, lng) => {
     if (lat && lng) {
       window.open(`https://maps.apple.com/?daddr=${lat},${lng}`, "_blank");
@@ -211,7 +208,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Manual status update: This is the ONLY way an item leaves the For Delivery list
   const markAsDelivered = (deliveryId, paymentType) => {
     const found = deliveries.find((d) => d._id === deliveryId);
     if (!found) return;
@@ -234,14 +230,12 @@ const Dashboard = () => {
       onClick={handleUnlockAudio} 
       className="p-3 md:p-6 max-w-6xl mx-auto space-y-4 relative"
     >
-      {/* Invisible HTML Audio Element */}
       <audio 
         ref={audioAlarmRef} 
         src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" 
         preload="auto" 
       />
 
-      {/* iOS Safari Audio Status Banner */}
       {!isAudioUnlocked && (
         <div className="bg-primary/10 border border-primary text-primary p-2.5 rounded-xl text-xs flex justify-between items-center">
           <span>🔊 Tap anywhere to enable iPhone audio & voice alerts</span>
@@ -296,7 +290,7 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Queue Section: Persistent, auto-sorted by distance, updates in real-time without refreshing */}
+      {/* Queue Section */}
       <section>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">
@@ -375,7 +369,7 @@ const Dashboard = () => {
               onClick={() => markAsDelivered(activeProximityAlert._id, "COD")}
               className="btn btn-success btn-block text-white font-bold text-base shadow-lg"
             >
-              ✅ Mark as Delivered (Receive / Cash / GCash)
+              ✅ Mark as Delivered (Cash / GCash)
             </button>
           </div>
         </div>
