@@ -4,23 +4,47 @@ import DeliveryList from "../components/DeliveryList";
 import DeliveryProgress from "../components/DeliveryProgress";
 import { useDeliveryStore } from "../stores/useDeliveryStore";
 
-// Helper: Haversine Formula para sa distansya (in meters)
+// Robust Helper: Extractor para sa Latitude at Longitude mula sa iba't ibang data structure
+const extractLatLng = (item) => {
+  if (!item) return { lat: null, lng: null };
+
+  let lat = item.lat ?? item.latitude ?? item.location?.lat ?? item.location?.latitude;
+  let lng = item.lng ?? item.longitude ?? item.location?.lng ?? item.location?.longitude;
+
+  // Suporta para sa MongoDB GeoJSON format [lng, lat]
+  if ((lat == null || lng == null) && Array.isArray(item.location?.coordinates)) {
+    lng = item.location.coordinates[0];
+    lat = item.location.coordinates[1];
+  }
+
+  const parsedLat = parseFloat(lat);
+  const parsedLng = parseFloat(lng);
+
+  return {
+    lat: !isNaN(parsedLat) ? parsedLat : null,
+    lng: !isNaN(parsedLng) ? parsedLng : null,
+  };
+};
+
+// Haversine Formula para sa eksaktong distansya sa metro
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
-  const R = 6371; // Earth radius in km
+  
+  const R = 6371000; // Earth radius in METERS
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
+  
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * (Math.PI / 180)) *
       Math.cos(lat2 * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
+      
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c * 1000;
+  return R * c; // Distansya sa METRO
 };
 
-// Global AudioContext for iOS Safari Compatibility
 let iosAudioCtx = null;
 
 const Dashboard = () => {
@@ -38,21 +62,18 @@ const Dashboard = () => {
   const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
   const [activeProximityAlert, setActiveProximityAlert] = useState(null);
 
-  // Reference for HTML audio element
   const audioAlarmRef = useRef(null);
 
-  // Load initial deliveries from store/database
+  // Initial Fetch mula sa backend
   useEffect(() => {
     fetchDeliveries();
   }, [fetchDeliveries]);
 
-  // Unlock iOS Safari Audio restriction on first user tap
+  // Unlock iOS Safari Audio
   const handleUnlockAudio = () => {
     if (!iosAudioCtx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        iosAudioCtx = new AudioContext();
-      }
+      if (AudioContext) iosAudioCtx = new AudioContext();
     }
     if (iosAudioCtx && iosAudioCtx.state === "suspended") {
       iosAudioCtx.resume();
@@ -63,9 +84,7 @@ const Dashboard = () => {
         audioAlarmRef.current.pause();
         audioAlarmRef.current.currentTime = 0;
         setIsAudioUnlocked(true);
-      }).catch((error) => {
-        console.log("Audio unlock failed, will try on next tap.", error);
-      });
+      }).catch((error) => console.log("Audio unlock retry needed:", error));
     }
 
     if ("speechSynthesis" in window) {
@@ -80,9 +99,7 @@ const Dashboard = () => {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         iosAudioCtx = new AudioContext();
       }
-      if (iosAudioCtx.state === "suspended") {
-        iosAudioCtx.resume();
-      }
+      if (iosAudioCtx.state === "suspended") iosAudioCtx.resume();
 
       const oscillator = iosAudioCtx.createOscillator();
       const gainNode = iosAudioCtx.createGain();
@@ -101,37 +118,36 @@ const Dashboard = () => {
     }
   };
 
-  // REAL-TIME GPS TRACKING & PROXIMITY TRIGGER
+  // REAL-TIME GPS TRACKING & PROXIMITY
   useEffect(() => {
     let watchId;
     if (navigator.geolocation && isTracking) {
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          const currentLat = pos.coords.latitude;
-          const currentLng = pos.coords.longitude;
+          const currentLat = parseFloat(pos.coords.latitude);
+          const currentLng = parseFloat(pos.coords.longitude);
 
-          if (currentLat != null && currentLng != null) {
+          if (!isNaN(currentLat) && !isNaN(currentLng)) {
             setRiderLocation({ lat: currentLat, lng: currentLng });
           }
 
-          // Proximity Alerts logic based on current store deliveries
+          // Proximity check para sa pop-up
           if (deliveries && deliveries.length > 0) {
             deliveries.forEach((item) => {
-              const itemLat = item.location?.lat ?? item.lat;
-              const itemLng = item.location?.lng ?? item.lng;
+              const { lat: itemLat, lng: itemLng } = extractLatLng(item);
 
               if (itemLat != null && itemLng != null) {
                 const dist = calculateDistance(currentLat, currentLng, itemLat, itemLng);
 
                 if (dist <= 150 && !alertedIds.has(item._id) && item.status !== "completed") {
                   if (audioAlarmRef.current) {
-                    audioAlarmRef.current.play().catch(e => console.log("Proximity audio blocked.", e));
+                    audioAlarmRef.current.play().catch(e => console.log("Audio play blocked", e));
                   }
                   triggerAudioBeep();
 
                   if ("speechSynthesis" in window) {
                     const utterance = new SpeechSynthesisUtterance(
-                      `Malapit ka na kay ${item.customerName || "Customer"}. Ihanda ang parcel.`
+                      `Malapit ka na kay ${item.customerName || item.name || "Customer"}. Ihanda ang parcel.`
                     );
                     utterance.lang = "tl-PH";
                     window.speechSynthesis.speak(utterance);
@@ -145,7 +161,7 @@ const Dashboard = () => {
           }
         },
         (err) => console.error("GPS Tracking Error:", err),
-        { enableHighAccuracy: true, maximumAge: Infinity, timeout: 60000 }
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
       );
     }
 
@@ -154,39 +170,48 @@ const Dashboard = () => {
     };
   }, [isTracking, deliveries, alertedIds]);
 
-  // AUTOMATIC SMART SORTING (Naayos para unahin ang pinakamalapit kapag aktibo ang GPS)
+  // 🎯 STRICT REAL-TIME DISTANCE SORTING (Inaayos ang pagkakasunod-sunod nina Kristhea at Nova)
   const sortedDeliveries = useMemo(() => {
     if (!deliveries) return [];
 
-    const activeDeliveries = deliveries.filter(item => item.status !== "completed");
+    // Filter out completed/returned items
+    const activeDeliveries = deliveries.filter(
+      (item) => item.status !== "completed" && item.status !== "returned"
+    );
 
     return [...activeDeliveries]
       .map((item) => {
-        const itemLat = item.location?.lat ?? item.lat;
-        const itemLng = item.location?.lng ?? item.lng;
-
+        const { lat: itemLat, lng: itemLng } = extractLatLng(item);
         const hasValidCoords = itemLat != null && itemLng != null;
-        const distanceMeters =
-          hasValidCoords && riderLocation
-            ? calculateDistance(riderLocation.lat, riderLocation.lng, itemLat, itemLng)
-            : Infinity;
+
+        let distanceMeters = Infinity;
+        if (hasValidCoords && riderLocation?.lat != null && riderLocation?.lng != null) {
+          distanceMeters = calculateDistance(
+            riderLocation.lat,
+            riderLocation.lng,
+            itemLat,
+            itemLng
+          );
+        }
 
         return {
           ...item,
+          lat: itemLat,
+          lng: itemLng,
           distanceMeters,
           hasValidCoords,
         };
       })
       .sort((a, b) => {
-        // Kung parehong may GPS coordinates at may Rider Location na naka-lock
+        // Unahin ang may valid na distansya, i-sort mula pinakamaliit (mas malapit) hanggang pinakamalaki
         if (a.hasValidCoords && b.hasValidCoords) {
           return a.distanceMeters - b.distanceMeters;
         }
         if (a.hasValidCoords && !b.hasValidCoords) return -1;
         if (!a.hasValidCoords && b.hasValidCoords) return 1;
         
-        // Fallback: Kung wala pang GPS, pagsunod-sunurin base sa pinakabago (descending ID/date)
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        // Fallback kung walang coordinates
+        return 0;
       });
   }, [deliveries, riderLocation]);
 
@@ -201,8 +226,8 @@ const Dashboard = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) => {
         setRiderLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
+          lat: parseFloat(pos.coords.latitude),
+          lng: parseFloat(pos.coords.longitude),
         });
       });
     }
@@ -243,7 +268,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header Status */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-base-100 p-3 rounded-xl border border-base-200 shadow-sm">
         <div className="flex items-center gap-2">
           <span className="relative flex h-3 w-3">
@@ -312,7 +337,7 @@ const Dashboard = () => {
         />
       </section>
 
-      {/* 🚨 PROXIMITY POP-UP MODAL */}
+      {/* Proximity Pop-up Alert Modal */}
       {activeProximityAlert && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-base-100 border-2 border-primary w-full max-w-lg rounded-2xl p-5 shadow-2xl space-y-4">
@@ -335,7 +360,7 @@ const Dashboard = () => {
 
             <div className="space-y-1">
               <h3 className="text-xl font-black text-base-content">
-                {activeProximityAlert.customerName || "Customer Name"}
+                {activeProximityAlert.customerName || activeProximityAlert.name || "Customer Name"}
               </h3>
               <p className="text-sm text-base-content/70">
                 📍 {activeProximityAlert.address || "Address unavailable"}
@@ -348,8 +373,7 @@ const Dashboard = () => {
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
                 onClick={() => {
-                  const lat = activeProximityAlert.location?.lat ?? activeProximityAlert.lat;
-                  const lng = activeProximityAlert.location?.lng ?? activeProximityAlert.lng;
+                  const { lat, lng } = extractLatLng(activeProximityAlert);
                   openExternalNavigation(lat, lng);
                 }}
                 className="btn btn-outline btn-primary btn-sm w-full gap-1"
