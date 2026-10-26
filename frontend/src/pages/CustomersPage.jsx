@@ -1,10 +1,9 @@
 // src/pages/CustomersPage.jsx
 import React, { useEffect, useRef, useState } from "react";
-import { MapPin, MapPinOff, Phone, PhoneOff } from "lucide-react";
+import { MapPin, MapPinOff, Phone, PhoneOff, Search, UserPlus, Pencil, PackagePlus, Navigation, X, Check, ShieldCheck } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import toast, { Toaster } from "react-hot-toast";
-import { Pencil, PackagePlus } from "lucide-react";
 import { useCustomerStore } from "../stores/useCustomerStore";
 
 // Fix Leaflet icons
@@ -85,7 +84,7 @@ export default function CustomersPage() {
   // Fetch customers
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [fetchCustomers]);
 
   // Update form when map is clicked
   useEffect(() => {
@@ -110,17 +109,14 @@ export default function CustomersPage() {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
-        // Update rider location (map will auto-focus via MapController)
         setRiderLocation({ lat, lng });
 
-        // Also update form fields
         setForm((f) => ({
           ...f,
           lat: lat.toFixed(6),
           lng: lng.toFixed(6),
         }));
 
-        // Update mapPick for marker placement
         setMapPick({ lat, lng });
 
         toast.success("Location detected successfully!");
@@ -144,7 +140,7 @@ export default function CustomersPage() {
         () => {},
         { enableHighAccuracy: true }
       );
-    }, 10000); // Update every 10 seconds
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -181,7 +177,6 @@ export default function CustomersPage() {
     setMapPick(null);
     setSaving(false);
   };
-
 
   // Pre-fill edit fields
   const startEdit = (c) => {
@@ -268,291 +263,379 @@ export default function CustomersPage() {
     setDeliverForId(null);
   };
 
-
   return (
-    <div className="space-y-6">
-      {/* FORM */}
-      <div ref={formRef} className="card bg-base-200 p-6 shadow-md">
-        <h3 className="text-lg font-semibold">
-          {editingId ? "Edit Receiver" : "Add Receiver"}
-        </h3>
+    <div className="space-y-6 max-w-7xl mx-auto p-3 sm:p-6 pb-28">
+      
+      {/* Top Header Banner */}
+      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-5 rounded-3xl border border-primary/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2 text-base-content">
+            <UserPlus className="text-primary" size={28} />
+            Receiver Management
+          </h1>
+          <p className="text-xs sm:text-sm text-base-content/70 mt-1">
+            Register delivery destinations, pin map locations, and dispatch orders quickly.
+          </p>
+        </div>
+        <div className="badge badge-primary badge-outline font-mono text-xs px-3 py-2 font-bold">
+          Total Receivers: {customers.length}
+        </div>
+      </div>
 
-        <form className="space-y-3 mt-3" onSubmit={handleSubmit}>
-          <input
-            className="input input-bordered w-full"
-            placeholder="Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* LEFT COLUMN: FORM & MAP PICKER */}
+        <div className="lg:col-span-5 space-y-6">
+          
+          {/* FORM CARD */}
+          <div ref={formRef} className="card bg-base-100 border border-base-200 shadow-xl p-5 sm:p-6 rounded-3xl">
+            <div className="flex justify-between items-center mb-4 border-b border-base-200 pb-3">
+              <h3 className="font-black text-lg flex items-center gap-2">
+                {editingId ? <Pencil size={18} className="text-warning" /> : <UserPlus size={18} className="text-primary" />}
+                {editingId ? "Edit Receiver Details" : "Add New Receiver"}
+              </h3>
+              {editingId && (
+                <span className="badge badge-warning badge-sm font-bold text-white">Editing Mode</span>
+              )}
+            </div>
 
-          {/* Address input with suggestions */}
-          <div className="relative">
-            <input
-              className="input input-bordered w-full"
-              placeholder="Address"
-              value={form.address}
-              onChange={(e) => handleAddressChange(e.target.value)}
-            />
-            {filteredAddresses.length > 0 && (
-              <div className="absolute z-10 bg-base-100 border w-full mt-1 rounded shadow">
-                {filteredAddresses.map((b) => (
-                  <div
-                    key={b}
-                    className="px-3 py-1 cursor-pointer hover:bg-base-200"
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div>
+                <label className="label text-xs font-bold uppercase tracking-wider text-base-content/70">Receiver Name</label>
+                <input
+                  className="input input-bordered w-full rounded-xl text-sm font-medium"
+                  placeholder="e.g. Juan Dela Cruz"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Address input with suggestions */}
+              <div className="relative">
+                <label className="label text-xs font-bold uppercase tracking-wider text-base-content/70">Delivery Address / Barangay</label>
+                <input
+                  className="input input-bordered w-full rounded-xl text-sm font-medium"
+                  placeholder="e.g. Mapalad, Santa Rosa"
+                  value={form.address}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  required
+                />
+                {filteredAddresses.length > 0 && (
+                  <div className="absolute z-20 bg-base-100 border border-base-200 w-full mt-1 rounded-2xl shadow-xl overflow-hidden">
+                    {filteredAddresses.map((b) => (
+                      <div
+                        key={b}
+                        className="px-4 py-2.5 cursor-pointer hover:bg-primary/10 text-sm font-medium transition-colors"
+                        onClick={() => {
+                          setForm((f) => ({ ...f, address: b }));
+                          setFilteredAddresses([]);
+                        }}
+                      >
+                        📍 {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="label text-xs font-bold uppercase tracking-wider text-base-content/70">Contact Number</label>
+                <input
+                  className="input input-bordered w-full rounded-xl text-sm font-medium"
+                  placeholder="09123456789"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+
+              {/* Coordinates Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <div>
+                  <label className="label text-[10px] font-bold uppercase text-base-content/60">Latitude</label>
+                  <input
+                    className="input input-bordered input-sm w-full rounded-lg text-xs font-mono bg-base-200/50"
+                    placeholder="Lat"
+                    disabled
+                    value={form.lat}
+                  />
+                </div>
+                <div>
+                  <label className="label text-[10px] font-bold uppercase text-base-content/60">Longitude</label>
+                  <input
+                    className="input input-bordered input-sm w-full rounded-lg text-xs font-mono bg-base-200/50"
+                    placeholder="Lng"
+                    disabled
+                    value={form.lng}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary w-full rounded-lg gap-1 font-bold text-white shadow-sm"
+                    onClick={handleUseMyLocation}
+                  >
+                    <Navigation size={13} /> GPS Pin
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="label text-xs font-bold uppercase tracking-wider text-base-content/70">Landmark / Remarks</label>
+                <input
+                  className="input input-bordered w-full rounded-xl text-sm font-medium"
+                  placeholder="e.g. Malapit sa puting gate / Tapat ng tindahan"
+                  value={form.remarks}
+                  onChange={(e) => setForm({ ...form, remarks: e.target.value })}
+                />
+              </div>
+
+              <div className="pt-2 space-y-2">
+                <button
+                  className="btn btn-primary w-full rounded-xl font-bold shadow-lg shadow-primary/20 text-base normal-case"
+                  type="submit"
+                  disabled={saving}
+                >
+                  {saving
+                    ? editingId
+                      ? "Updating Receiver..."
+                      : "Saving Receiver..."
+                    : editingId
+                    ? "Update Receiver"
+                    : "Save Receiver"}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    className="btn btn-outline w-full rounded-xl font-medium"
                     onClick={() => {
-                      setForm((f) => ({ ...f, address: b }));
+                      setForm(emptyForm);
+                      setEditingId(null);
+                      setMapPick(null);
                       setFilteredAddresses([]);
                     }}
                   >
-                    {b}
-                  </div>
-                ))}
+                    Cancel Edit
+                  </button>
+                )}
               </div>
-            )}
+            </form>
           </div>
 
-          <input
-            className="input input-bordered w-full"
-            placeholder="Phone"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          />
+          {/* MAP PICKER CARD */}
+          <div className="card bg-base-100 border border-base-200 shadow-xl p-4 sm:p-5 rounded-3xl">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-sm flex items-center gap-1.5 text-base-content/80">
+                <MapPin size={16} className="text-primary" /> Pin Location on Map
+              </h3>
+              <span className="text-[11px] text-base-content/50 italic">Click anywhere to select pin</span>
+            </div>
+            <div className="relative z-0 rounded-2xl overflow-hidden border border-base-200 shadow-inner">
+              <MapContainer
+                center={
+                  form.lat && form.lng
+                    ? [Number(form.lat), Number(form.lng)]
+                    : [15.484995, 121.086929]
+                }
+                zoom={14}
+                className="w-full h-72 rounded-2xl"
+                whenCreated={(map) => (mapRef.current = map)}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <MapClickPicker onPick={setMapPick} />
+                <MapController riderLocation={riderLocation || mapPick} />
 
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              className="input input-bordered"
-              placeholder="Latitude"
-              disabled
-              value={form.lat}
-            />
-            <input
-              className="input input-bordered"
-              placeholder="Longitude"
-              value={form.lng}
-              disabled
-            />
-            <button
-              type="button"
-              className="btn btn-primary text-white"
-              onClick={handleUseMyLocation}
-            >
-              Use My Location
-            </button>
+                {form.lat && form.lng && (
+                  <Marker position={[Number(form.lat), Number(form.lng)]}>
+                    <Popup>Selected Destination Pin</Popup>
+                  </Marker>
+                )}
+              </MapContainer>
+            </div>
           </div>
 
-          <input
-            className="input input-bordered w-full"
-            placeholder="Remarks"
-            value={form.remarks}
-            onChange={(e) => setForm({ ...form, remarks: e.target.value })}
-          />
-
-          <button
-            className="btn btn-primary text-white w-full"
-            type="submit"
-            disabled={saving}
-          >
-            {saving
-              ? editingId
-                ? "Updating..."
-                : "Saving..."
-              : editingId
-              ? "Update"
-              : "Save"}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-ghost w-full"
-            onClick={() => {
-              setForm(emptyForm);
-              setEditingId(null);
-              setMapPick(null);
-              setFilteredAddresses([]);
-            }}
-          >
-            Clear
-          </button>
-        </form>
-      </div>
-
-      {/* MAP PICKER */}
-      <div className="card bg-base-200 p-4 shadow-md">
-        <h3 className="font-semibold mb-2">Map Picker</h3>
-        <div className="relative z-0">
-          <MapContainer
-            center={
-              form.lat && form.lng
-                ? [Number(form.lat), Number(form.lng)]
-                : [14.5995, 120.9842]
-            }
-            zoom={13}
-            className="w-full h-64 rounded"
-            whenCreated={(map) => (mapRef.current = map)}
-          >
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <MapClickPicker onPick={setMapPick} />
-
-            {/* Auto-follow rider */}
-            <MapController riderLocation={riderLocation || mapPick} />
-
-            {form.lat && form.lng && (
-              <Marker position={[Number(form.lat), Number(form.lng)]}>
-                <Popup>Selected Location</Popup>
-              </Marker>
-            )}
-          </MapContainer>
         </div>
-      </div>
 
-      {/* CUSTOMER LIST */}
-      <div className="card bg-base-200 p-2 pb-48 shadow-md">
-        <h3 className="font-semibold mb-2">Receivers</h3>
+        {/* RIGHT COLUMN: CUSTOMER LIST & DISPATCH */}
+        <div className="lg:col-span-7 space-y-4">
+          
+          <div className="card bg-base-100 border border-base-200 shadow-xl p-4 sm:p-6 rounded-3xl space-y-4">
+            
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <h3 className="font-black text-xl flex items-center gap-2">
+                Receivers Directory 
+                <span className="badge badge-neutral badge-sm font-mono">{filtered.length}</span>
+              </h3>
 
-        <input
-          className="input input-bordered w-full mb-4"
-          placeholder="Search receivers..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-
-        <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
-          {filtered.map((c) => (
-            <div key={c._id} className="card bg-base-100 p-3 border">
-              <div className="flex justify-between">
-      
-                <div>
-                  {/* NAME + LOCATION STATUS */}
-                  <div className="font-semibold flex items-center gap-2">
-                    {c.name}
-
-                    {Number(c.lat) === 15.484995 && Number(c.lng) === 121.086929 ? (
-                      <MapPinOff
-                        size={14}
-                        className="text-base-content/40"
-                        title="No pin location"
-                      />
-                    ) : (
-                      <MapPin
-                        size={14}
-                        className="text-success"
-                        title="Pin location available"
-                      />
-                    )}
-                  </div>
-
-                  {/* PHONE */}
-                  <div className="text-xs flex items-center gap-2 mt-1 text-base-content/70">
-                    {c.phone ? (
-                      <>
-                        <Phone size={12} />
-                        {c.phone}
-                      </>
-                    ) : (
-                      <>
-                        <PhoneOff size={12} />
-                        <span className="italic">No phone number</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* ADDRESS */}
-                  <div className="text-xs flex items-center gap-2 text-base-content/60">
-                    <MapPin size={12} />
-                    {c.address || "No address"}
-                  </div>
-
-                  {/* REMARKS (ONLY SHOW IF EXISTS) */}
-                  {c.remarks && (
-                    <div className="text-xs mt-1 italic text-base-content/50">
-                      {c.remarks}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <button className="btn btn-sm" onClick={() => startEdit(c)}>
-                    <Pencil size={16} /> Edit
-                  </button>
-
-                  <button
-                    className="btn btn-sm btn-primary text-white"
-                    onClick={() => setDeliverForId(c._id)}
-                  >
-                    <PackagePlus size={16} /> Deliver
-                  </button>
-                </div>
+              {/* Search Bar */}
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base-content/40" size={16} />
+                <input
+                  className="input input-bordered input-sm w-full pl-10 rounded-xl text-sm font-medium"
+                  placeholder="Search name, address, phone..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
               </div>
+            </div>
 
-              {deliverForId === c._id && (
-                <div className="mt-3 p-3 bg-base-200 rounded">
-                  <div className="font-medium mb-2">Payment Status</div>
-
-                  {/* SEGMENTED BUTTONS */}
-                  <div className="join w-full">
-                    <button
-                      className={`btn btn-sm join-item flex-1 border-base-400 ${
-                        deliveryPaymentType === "paid"
-                          ? "btn-success text-white"
-                          : "btn-outline"
-                      }`}
-                      onClick={() => {
-                        setDeliveryPaymentType("paid");
-                        setDeliveryAmount("");
-                      }}
-                    >
-                      Paid
-                    </button>
-
-                    <button
-                      className={`btn btn-sm join-item flex-1 border-base-400 ${
-                        deliveryPaymentType === "unpaid"
-                          ? "btn-primary text-white"
-                          : "btn-outline"
-                      }`}
-                      onClick={() => setDeliveryPaymentType("unpaid")}
-                    >
-                      Cash on Delivery
-                    </button>
-                  </div>
-
-                  {/* AMOUNT INPUT */}
-                  {deliveryPaymentType === "unpaid" && (
-                    <input
-                      type="number"
-                      className="input input-bordered input-sm mt-3 w-full"
-                      placeholder="Amount"
-                      value={deliveryAmount}
-                      onChange={(e) => setDeliveryAmount(e.target.value)}
-                    />
-                  )}
-
-                  {/* ACTION BUTTONS */}
-                  <div className="flex justify-end gap-2 mt-3">
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => setDeliverForId(null)}
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      className="btn btn-sm btn-primary"
-                      onClick={() => confirmDelivery(c)}
-                      disabled={!deliveryPaymentType}
-                    >
-                      Submit
-                    </button>
-                  </div>
+            {/* Customers Grid */}
+            <div className="grid gap-3 grid-cols-1">
+              {filtered.length === 0 ? (
+                <div className="text-center py-12 bg-base-200/50 rounded-2xl border border-dashed border-base-300">
+                  <p className="text-sm font-medium text-base-content/60">No receivers found matching your search.</p>
                 </div>
+              ) : (
+                filtered.map((c) => (
+                  <div key={c._id} className="card bg-base-100 border border-base-200/80 shadow-sm hover:shadow-md transition-all rounded-2xl p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      
+                      <div className="space-y-1">
+                        {/* NAME + LOCATION STATUS */}
+                        <div className="font-black text-base flex items-center gap-2">
+                          {c.name}
+                          {Number(c.lat) === 15.484995 && Number(c.lng) === 121.086929 ? (
+                            <span className="badge badge-error badge-outline badge-xs gap-1 font-medium">
+                              <MapPinOff size={10} /> No Pin
+                            </span>
+                          ) : (
+                            <span className="badge badge-success badge-outline badge-xs gap-1 font-medium">
+                              <MapPin size={10} /> Pinned
+                            </span>
+                          )}
+                        </div>
 
+                        {/* ADDRESS */}
+                        <div className="text-xs flex items-center gap-1.5 text-base-content/70 font-medium">
+                          <MapPin size={13} className="text-primary shrink-0" />
+                          <span>{c.address || "No address provided"}</span>
+                        </div>
+
+                        {/* PHONE */}
+                        <div className="text-xs flex items-center gap-1.5 text-base-content/60">
+                          {c.phone ? (
+                            <>
+                              <Phone size={13} className="text-success shrink-0" />
+                              <span className="font-mono">{c.phone}</span>
+                            </>
+                          ) : (
+                            <>
+                              <PhoneOff size={13} className="text-base-content/30 shrink-0" />
+                              <span className="italic text-base-content/40">No phone number</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* REMARKS */}
+                        {c.remarks && (
+                          <div className="text-xs mt-1 italic bg-base-200/60 px-2.5 py-1 rounded-lg text-base-content/70 border border-base-200">
+                            📝 {c.remarks}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ACTION BUTTONS */}
+                      <div className="flex sm:flex-col gap-2 w-full sm:w-auto shrink-0">
+                        <button className="btn btn-sm btn-outline rounded-xl gap-1 flex-1 sm:flex-none font-medium" onClick={() => startEdit(c)}>
+                          <Pencil size={14} /> Edit
+                        </button>
+
+                        <button
+                          className="btn btn-sm btn-primary rounded-xl gap-1 flex-1 sm:flex-none font-bold text-white shadow-sm"
+                          onClick={() => setDeliverForId(c._id)}
+                        >
+                          <PackagePlus size={14} /> Deliver
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* DELIVER DISPATCH ACCORDION BOX */}
+                    {deliverForId === c._id && (
+                      <div className="mt-3 p-4 bg-base-200/70 border border-base-300 rounded-2xl space-y-3 animate-in fade-in duration-200">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-xs uppercase tracking-wider text-base-content/70">Payment Status & Dispatch</span>
+                          <button 
+                            className="btn btn-xs btn-circle btn-ghost" 
+                            onClick={() => setDeliverForId(null)}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+
+                        {/* SEGMENTED BUTTONS */}
+                        <div className="join w-full shadow-xs">
+                          <button
+                            className={`btn btn-sm join-item flex-1 font-bold ${
+                              deliveryPaymentType === "paid"
+                                ? "btn-success text-white"
+                                : "btn-outline border-base-300"
+                            }`}
+                            onClick={() => {
+                              setDeliveryPaymentType("paid");
+                              setDeliveryAmount("");
+                            }}
+                          >
+                            <Check size={14} /> Paid (GCash / Settled)
+                          </button>
+
+                          <button
+                            className={`btn btn-sm join-item flex-1 font-bold ${
+                              deliveryPaymentType === "unpaid"
+                                ? "btn-primary text-white"
+                                : "btn-outline border-base-300"
+                            }`}
+                            onClick={() => setDeliveryPaymentType("unpaid")}
+                          >
+                            <ShieldCheck size={14} /> Cash on Delivery (COD)
+                          </button>
+                        </div>
+
+                        {/* AMOUNT INPUT */}
+                        {deliveryPaymentType === "unpaid" && (
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-base-content/50">₱</span>
+                            <input
+                              type="number"
+                              className="input input-bordered input-sm pl-8 w-full rounded-xl font-bold"
+                              placeholder="Enter collection amount (e.g. 350)"
+                              value={deliveryAmount}
+                              onChange={(e) => setDeliveryAmount(e.target.value)}
+                            />
+                          </div>
+                        )}
+
+                        {/* ACTION BUTTONS */}
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            className="btn btn-sm btn-ghost rounded-xl font-medium"
+                            onClick={() => setDeliverForId(null)}
+                          >
+                            Cancel
+                          </button>
+
+                          <button
+                            className="btn btn-sm btn-primary rounded-xl px-5 font-bold text-white shadow-md"
+                            onClick={() => confirmDelivery(c)}
+                            disabled={!deliveryPaymentType}
+                          >
+                            Confirm Dispatch 🚀
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
-          ))}
+
+          </div>
+
         </div>
+
       </div>
 
-      <Toaster />
+      <Toaster position="bottom-center" />
     </div>
   );
 }

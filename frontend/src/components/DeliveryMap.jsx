@@ -8,15 +8,15 @@ delete L.Icon.Default.prototype._getIconUrl;
 // --- Icons ---
 const riderIcon = new L.Icon({
   iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-  iconSize: [40, 40],
-  iconAnchor: [20, 40],
+  iconSize: [38, 38],
+  iconAnchor: [19, 38],
 });
 
 const greenIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
   iconRetinaUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
+  iconSize: [24, 38],
+  iconAnchor: [12, 38],
 });
 
 // --- MapController handles auto-following rider and selected delivery ---
@@ -26,14 +26,14 @@ function MapController({ rider, selectedDelivery }) {
   // Follow rider location
   useEffect(() => {
     if (rider?.lat && rider?.lng) {
-      map.setView([rider.lat, rider.lng], 15);
+      map.setView([rider.lat, rider.lng], 15, { animate: true });
     }
   }, [rider, map]);
 
   // Focus selected delivery
   useEffect(() => {
     if (selectedDelivery?.customerId?.lat && selectedDelivery?.customerId?.lng) {
-      map.setView([selectedDelivery.customerId.lat, selectedDelivery.customerId.lng], 16);
+      map.setView([selectedDelivery.customerId.lat, selectedDelivery.customerId.lng], 16, { animate: true });
     }
   }, [selectedDelivery, map]);
 
@@ -70,8 +70,8 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
   ].filter(Boolean);
 
   return (
-    <div className="rounded-lg overflow-hidden shadow-md h-[60vh]">
-      <MapContainer center={initialCenter} zoom={13} className="w-full h-full">
+    <div className="rounded-3xl overflow-hidden shadow-xl border border-base-200 bg-base-100 h-[50vh] sm:h-[60vh] lg:h-[65vh] w-full relative">
+      <MapContainer center={initialCenter} zoom={13} className="w-full h-full z-0">
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
@@ -82,7 +82,9 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
         {/* Rider Marker */}
         {rider?.lat && rider?.lng && (
           <Marker position={[rider.lat, rider.lng]} icon={riderIcon}>
-            <Popup>Rider Location</Popup>
+            <Popup className="rounded-2xl shadow-md font-sans">
+              <div className="p-1 font-bold text-xs text-primary">🛵 Rider Current Location</div>
+            </Popup>
           </Marker>
         )}
 
@@ -93,11 +95,15 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
 
           return (
             <Marker key={idx} position={[customer.lat, customer.lng]} icon={greenIcon}>
-              <Popup>
-                <div>
-                  <div className="font-semibold">{customer.name || "No Name"}</div>
-                  <div className="text-xs">{customer.address || "No Address"}</div>
-                  <div className="text-xs">{d.amount ? `₱${d.amount}` : ""}</div>
+              <Popup className="rounded-2xl shadow-md font-sans">
+                <div className="p-1.5 space-y-0.5 min-w-[140px]">
+                  <div className="font-black text-sm text-base-content">{customer.name || "No Name"}</div>
+                  <div className="text-xs text-base-content/70 font-medium">📍 {customer.address || "No Address"}</div>
+                  {d.amount > 0 && (
+                    <div className="text-xs font-bold text-success pt-1">
+                      Due: ₱{d.amount.toLocaleString()}.00
+                    </div>
+                  )}
                 </div>
               </Popup>
             </Marker>
@@ -105,7 +111,16 @@ export default function DeliveryMap({ deliveries = [], selectedDelivery = null, 
         })}
 
         {/* Route Polyline */}
-        {routeCoordinates.length > 1 && <Polyline positions={routeCoordinates} color="blue" weight={4} />}
+        {routeCoordinates.length > 1 && (
+          <Polyline 
+            positions={routeCoordinates} 
+            color="#3b82f6" 
+            weight={4} 
+            opacity={0.8}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
       </MapContainer>
     </div>
   );
